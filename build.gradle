@@ -1,0 +1,122 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            name "central snapshots"
+            url "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
+    }
+
+    dependencies {
+        classpath group: 'com.techshroom', name: 'Aversion', version: '3.0.0'
+        classpath group: 'org.jetbrains.kotlin', name: 'kotlin-gradle-plugin', version: kotlin_version
+    }
+}
+plugins {
+    id "com.github.hierynomus.license" version "0.13.1"
+    id 'net.researchgate.release' version '2.4.0'
+}
+apply plugin: 'application'
+apply plugin: 'jacoco'
+apply plugin: 'idea'
+apply plugin: 'kotlin'
+
+apply plugin: 'aversion-apt'
+apply plugin: 'aversion-maven'
+apply plugin: 'aversion-util'
+
+mainClassName = 'me.kenzierocks.mcpide.MCPIDE'
+
+util {
+    javaVersion = '1.8'
+    extraContainers.add('org.eclipse.fx.ide.jdt.core.JAVAFX_CONTAINER')
+}
+idea.project.languageLevel = util.javaVersion
+
+eclipse.project {
+    natures 'org.eclipse.xtext.ui.shared.xtextNature'
+    buildCommand 'org.eclipse.xtext.ui.shared.xtextBuilder'
+}
+
+mavencfg {
+    description 'An IDE for writing mappings for MCP.'
+    coords 'kenzierocks', 'MCPIDE'
+}
+
+defaultTasks 'clean', 'licenseFormat', 'build'
+
+configurations.all {
+    resolutionStrategy {
+        cacheChangingModulesFor 0, 'seconds'
+    }
+}
+
+repositories {
+    jcenter()
+    maven {
+        name "central snapshots"
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+}
+
+dependencies {
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
+    compile group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: kotlin_version
+    compile group: 'org.jetbrains.kotlin', name: 'kotlin-reflect', version: kotlin_version
+    compile group: 'com.beust', name: 'klaxon', version: '0.27'
+    compileOnly group: 'com.techshroom', name: 'jsr305-plus', version: '0.0.1'
+
+    addAPTReqWComp group: 'com.google.guava', name: 'guava', version: '19.0'
+    addAPT group: 'com.google.auto.service', name: 'auto-service', version: '1.0-SNAPSHOT'
+    addAPT group: 'com.google.auto.value', name: 'auto-value', version: '1.3'
+    addAPTReq name: 'aopalliance'
+    addAPTReq name: 'asm'
+    addAPTReq name: 'auto-value'
+    addAPTReq name: 'auto-common'
+    addAPTReq name: 'cglib'
+    addAPTReq name: 'commons-collections'
+    addAPTReq name: 'commons-lang'
+    addAPTReq name: 'dagger'
+    addAPTReq name: 'javawriter'
+    addAPTReq name: 'javax.inject'
+    addAPTReq name: 'velocity'
+
+    def junit = '5.0.0-M3'
+    testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junit
+    testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junit
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+configure([compileJava, compileTestJava]) {
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-path']
+    options.deprecation = true
+    options.encoding = 'UTF-8'
+    options.incremental = true
+    options.fork = true
+}
+
+license {
+    ext {
+        name = project.name
+        organization = project.organization
+        url = project.url
+    }
+    header = rootProject.file('HEADER.txt')
+    ignoreFailures = false
+    strictCheck = true
+    include '**/*.java'
+    mapping {
+        java = 'SLASHSTAR_STYLE'
+    }
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled = true
+        html.enabled = true
+    }
+}
+check.dependsOn jacocoTestReport

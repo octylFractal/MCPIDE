@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.MenuBar?>
+<?import javafx.scene.control.MenuItem?>
+<?import javafx.scene.control.SeparatorMenuItem?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.TreeView?>
+<?import javafx.scene.input.KeyCodeCombination?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<VBox maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="480.0" prefWidth="640.0" xmlns="http://javafx.com/javafx/8.0.65" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.kenzierocks.mcpide.Controller">
+   <children>
+      <MenuBar fx:id="menuBar" VBox.vgrow="NEVER">
+        <menus>
+          <Menu mnemonicParsing="false" text="File">
+            <items>
+                  <MenuItem mnemonicParsing="false" onAction="#loadDirectory" text="Open Project...">
+                     <accelerator>
+                        <KeyCodeCombination alt="UP" code="O" control="UP" meta="DOWN" shift="UP" shortcut="UP" />
+                     </accelerator></MenuItem>
+                  <Menu fx:id="recentExportsMenu" mnemonicParsing="false" text="Export">
+                    <items>
+                        <MenuItem id="menu-item-recent-places" fx:id="recentExportsMenuItem" disable="true" mnemonicParsing="false" text="Recent Places" />
+                        <SeparatorMenuItem mnemonicParsing="false" />
+                      <MenuItem id="menu-item-to" mnemonicParsing="false" onAction="#export" text="To...">
+                           <accelerator>
+                              <KeyCodeCombination alt="UP" code="E" control="UP" meta="DOWN" shift="DOWN" shortcut="UP" />
+                           </accelerator></MenuItem>
+                    </items>
+                  </Menu>
+                  <SeparatorMenuItem mnemonicParsing="false" />
+              <MenuItem fx:id="quitMenuItem" mnemonicParsing="false" onAction="#quit" text="Quit" />
+            </items>
+          </Menu>
+          <Menu mnemonicParsing="false" text="Help">
+            <items>
+              <MenuItem mnemonicParsing="false" onAction="#about" text="About" />
+            </items>
+          </Menu>
+        </menus>
+      </MenuBar>
+      <SplitPane dividerPositions="0.1, 0.65" stylesheets="@Main.css" VBox.vgrow="ALWAYS">
+         <items>
+            <TreeView fx:id="fileTree" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" />
+            <TabPane fx:id="textView" tabMaxHeight="20.0">
+               <tabs>
+                  <Tab id="autoSizerTab" closable="false" disable="true">
+                  </Tab>
+               </tabs></TabPane>
+            <VBox prefHeight="200.0" prefWidth="100.0">
+               <children>
+                  <HBox>
+                     <children>
+                        <ToolBar HBox.hgrow="ALWAYS">
+                           <items>
+                              <TextField fx:id="searchRenames" prefWidth="100.0" promptText="Search" />
+                              <Pane HBox.hgrow="ALWAYS" />
+                              <Label alignment="CENTER" onMouseClicked="#addRename" text="+" textAlignment="CENTER">
+                                 <font>
+                                    <Font size="24.0" />
+                                 </font>
+                              </Label>
+                           </items>
+                        </ToolBar>
+                     </children>
+                  </HBox>
+                  <ListView fx:id="renameList" editable="true" fixedCellSize="80.0" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" VBox.vgrow="ALWAYS" />
+               </children>
+            </VBox>
+         </items>
+      </SplitPane>
+   </children>
+</VBox>
