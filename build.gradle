@@ -108,8 +108,10 @@ license {
     ignoreFailures = false
     strictCheck = true
     include '**/*.java'
+    include '**/*.kt'
     mapping {
         java = 'SLASHSTAR_STYLE'
+        kt = 'SLASHSTAR_STYLE'
     }
 }
 
