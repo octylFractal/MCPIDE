@@ -1,0 +1,72 @@
+import java.nio.file.DirectoryNotEmptyException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermissions
+
+Zip distZipTask = (Zip) project.tasks.getByName("distZip")
+
+// apps are a directory
+def appDir = file("build/${project.name}.app").toPath().resolve("Contents")
+def appResources = appDir.resolve("Resources")
+def appMacOs = appDir.resolve("MacOS")
+
+def srcResources = file("release-resources").toPath()
+
+class Methods {
+    static Path copyIntoDir(Path from, Path dirTo) {
+        Path pathTo = dirTo.resolve(from.fileName)
+        Files.copy(from, pathTo, StandardCopyOption.REPLACE_EXISTING)
+        return pathTo
+    }
+}
+
+// NOTE: paths are broken with gradle -- don't ever pass them to gradle
+
+project.task("macReleaseApp").configure {
+    dependsOn distZipTask
+
+    inputs.files(distZipTask.archivePath)
+    outputs.dir(appDir.toFile())
+
+    doFirst {
+        // macOS app structure is like so
+        // MCPIDE.app/Contents/
+        //     MacOS/mcpide-bootstrap - script that calls script from distZip
+        //     Resources/MCPIDE - MCPIDE-<version>.zip contents
+        //     Resources/logo.png - Logo, data is stored in ./release-resources/
+        //     Info.plist - macOS startup file, data is stored in ./release-resources/
+        Files.createDirectories(appResources)
+        Files.createDirectories(appMacOs)
+
+        def resourceRoot = appResources.resolve(project.name)
+        project.copy {
+            from project.zipTree(distZipTask.archivePath)
+            into resourceRoot.toFile()
+        }
+        // after copying zip content we must move it again
+        // see https://github.com/gradle/gradle/issues/1108
+        def baseDir = resourceRoot.resolve("${project.name}-${project.version}")
+
+        try {
+            Files.move(baseDir.resolve("bin"), appResources.resolve("bin"), StandardCopyOption.REPLACE_EXISTING)
+        } catch (DirectoryNotEmptyException ignore) {
+        }
+        try {
+            Files.move(baseDir.resolve("lib"), appResources.resolve("lib"), StandardCopyOption.REPLACE_EXISTING)
+        } catch (DirectoryNotEmptyException ignore) {
+        }
+        resourceRoot.toFile().deleteDir()
+
+        Methods.copyIntoDir(srcResources.resolve("Info.plist"), appDir)
+        Methods.copyIntoDir(srcResources.resolve("icon.icns"), appResources)
+        def newFile = Methods.copyIntoDir(srcResources.resolve("mcpide-bootstrap"), appMacOs)
+
+        // chmod 755 mcpide-bootstrap
+        Files.setPosixFilePermissions(newFile, PosixFilePermissions.fromString("rwxr-xr-x"))
+    }
+}
+
+project.task("releases").configure {
+    dependsOn "macReleaseApp"//, "", ""
+}

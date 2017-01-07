@@ -122,3 +122,5 @@ jacocoTestReport {
     }
 }
 check.dependsOn jacocoTestReport
+
+apply from: 'release-files.gradle'
