@@ -6,8 +6,11 @@ import java.nio.file.attribute.PosixFilePermissions
 
 Zip distZipTask = (Zip) project.tasks.getByName("distZip")
 
+def releasesFolderName = "releases"
+def releasesBase = file("build/$releasesFolderName")
+
 // apps are a directory
-def appDir = file("build/${project.name}.app").toPath().resolve("Contents")
+def appDir = releasesBase.toPath().resolve("${project.name}.app").resolve("Contents")
 def appResources = appDir.resolve("Resources")
 def appMacOs = appDir.resolve("MacOS")
 
@@ -67,6 +70,52 @@ project.task("macReleaseApp").configure {
     }
 }
 
-project.task("releases").configure {
-    dependsOn "macReleaseApp"//, "", ""
+// make a shadow jar for Windows/Linux -- the gradle script is better for macOS
+jar {
+    manifest {
+        attributes 'MainClass': project.property('mainClassName')
+    }
+}
+
+Task createExe = project.tasks.getByName('createExe')
+Task shadowJar = project.tasks.getByName('shadowJar')
+createExe.dependsOn shadowJar
+
+project.task('windowsReleaseExe').configure {
+    dependsOn createExe
+}
+launch4j {
+    mainClassName = project.property('mainClassName')
+    icon = srcResources.resolve('icon.ico').toFile()
+    outputDir = releasesFolderName // output to the build folder
+    copyConfigurable = shadowJar.outputs.files
+    jar = shadowJar.outputs.files.files.first()
+}
+
+// URJ is just the shadowJar
+project.task([type: Copy], 'universalReleaseJar').configure {
+    dependsOn shadowJar
+    def shadowJarFile = shadowJar.outputs.files.first()
+    def outFile = new File(releasesBase, "${project.name}-${project.version}-universal.jar")
+
+    from (shadowJarFile) {
+        rename ".*", outFile.name
+    }
+    into outFile.parentFile
+}
+
+project.task("deleteExtraLaunch4jJunk").configure {
+    description = "Deletes the extra launch4j lib folder"
+    mustRunAfter createExe
+
+    def lib = new File(releasesBase, "lib")
+    inputs.files(lib)
+    doLast {
+        lib.deleteDir()
+    }
+}
+
+project.task("osBundles").configure {
+    dependsOn "macReleaseApp", "windowsReleaseExe", "universalReleaseJar"
+    dependsOn "deleteExtraLaunch4jJunk"
 }
