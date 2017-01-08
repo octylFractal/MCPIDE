@@ -83,7 +83,8 @@ project.task("macReleaseApp").configure {
 
         // rewrite Info.plist with correct version
         NSDictionary infoPlist = (NSDictionary) PropertyListParser.parse(infoPlistFile.toFile())
-        infoPlist.put("CFBundleGetInfoString", new NSString("${project.name} ${project.version}"))
+        // GetInfo is basically version string
+        infoPlist.put("CFBundleGetInfoString", new NSString("${project.version}"))
         PropertyListParser.saveAsXML(infoPlist, infoPlistFile.toFile())
     }
 }
