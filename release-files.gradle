@@ -1,3 +1,16 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath group: 'com.googlecode.plist', name: 'dd-plist', version: '1.16'
+    }
+}
+
+import com.dd.plist.NSDictionary
+import com.dd.plist.NSString
+import com.dd.plist.PropertyListParser
+
 import java.nio.file.DirectoryNotEmptyException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -61,12 +74,17 @@ project.task("macReleaseApp").configure {
         }
         resourceRoot.toFile().deleteDir()
 
-        Methods.copyIntoDir(srcResources.resolve("Info.plist"), appDir)
+        def infoPlistFile = Methods.copyIntoDir(srcResources.resolve("Info.plist"), appDir)
         Methods.copyIntoDir(srcResources.resolve("icon.icns"), appResources)
-        def newFile = Methods.copyIntoDir(srcResources.resolve("mcpide-bootstrap"), appMacOs)
+        def bootstrapScript = Methods.copyIntoDir(srcResources.resolve("mcpide-bootstrap"), appMacOs)
 
         // chmod 755 mcpide-bootstrap
-        Files.setPosixFilePermissions(newFile, PosixFilePermissions.fromString("rwxr-xr-x"))
+        Files.setPosixFilePermissions(bootstrapScript, PosixFilePermissions.fromString("rwxr-xr-x"))
+
+        // rewrite Info.plist with correct version
+        NSDictionary infoPlist = (NSDictionary) PropertyListParser.parse(infoPlistFile.toFile())
+        infoPlist.put("CFBundleGetInfoString", new NSString("${project.name} ${project.version}"))
+        PropertyListParser.saveAsXML(infoPlist, infoPlistFile.toFile())
     }
 }
 
@@ -90,6 +108,13 @@ launch4j {
     outputDir = releasesFolderName // output to the build folder
     copyConfigurable = shadowJar.outputs.files
     jar = shadowJar.outputs.files.files.first()
+    jreRuntimeBits = '64/32'
+
+    // not using HTTPS should be a punishable crime
+    downloadUrl = "https://java.com/download"
+
+    fileDescription = "${project.name} ${project.version}"
+    windowTitle = project.name
 }
 
 // URJ is just the shadowJar
@@ -98,7 +123,7 @@ project.task([type: Copy], 'universalReleaseJar').configure {
     def shadowJarFile = shadowJar.outputs.files.first()
     def outFile = new File(releasesBase, "${project.name}-${project.version}-universal.jar")
 
-    from (shadowJarFile) {
+    from(shadowJarFile) {
         rename ".*", outFile.name
     }
     into outFile.parentFile
