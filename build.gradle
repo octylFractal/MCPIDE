@@ -25,7 +25,6 @@ apply plugin: 'idea'
 apply plugin: 'kotlin'
 
 apply plugin: 'aversion-apt'
-apply plugin: 'aversion-maven'
 apply plugin: 'aversion-util'
 
 mainClassName = 'me.kenzierocks.mcpide.MCPIDE'
@@ -40,13 +39,6 @@ eclipse.project {
     natures 'org.eclipse.xtext.ui.shared.xtextNature'
     buildCommand 'org.eclipse.xtext.ui.shared.xtextBuilder'
 }
-
-mavencfg {
-    description 'An IDE for writing mappings for MCP.'
-    coords 'kenzierocks', 'MCPIDE'
-}
-
-defaultTasks 'clean', 'licenseFormat', 'build'
 
 configurations.all {
     resolutionStrategy {
