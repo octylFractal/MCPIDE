@@ -17,8 +17,11 @@ plugins {
     id 'net.researchgate.release' version '2.4.0'
     // for release-files
     id 'com.github.johnrengelman.shadow' version '1.2.4'
-    id 'edu.sc.seis.launch4j' version '2.1.0'
 }
+
+// from release-files
+apply plugin: 'edu.sc.seis.launch4j'
+
 apply plugin: 'application'
 apply plugin: 'jacoco'
 apply plugin: 'idea'
