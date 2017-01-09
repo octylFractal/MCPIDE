@@ -118,4 +118,4 @@ jacocoTestReport {
 }
 check.dependsOn jacocoTestReport
 
-apply from: 'release-files.gradle'
+apply plugin: me.kenzierocks.releasefiles.ReleaseFilesPlugin
