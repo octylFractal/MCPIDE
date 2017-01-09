@@ -121,4 +121,9 @@ jacocoTestReport {
 }
 check.dependsOn jacocoTestReport
 
+release.git {
+    // release/<something> or master
+    requireBranch = /release\/.+|master/
+}
+
 apply plugin: me.kenzierocks.releasefiles.ReleaseFilesPlugin
