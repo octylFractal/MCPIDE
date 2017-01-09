@@ -65,7 +65,7 @@ dependencies {
     compileOnly group: 'com.techshroom', name: 'jsr305-plus', version: '0.0.1'
 
     addAPTReqWComp group: 'com.google.guava', name: 'guava', version: '19.0'
-    addAPT group: 'com.google.auto.service', name: 'auto-service', version: '1.0-SNAPSHOT'
+    addAPT group: 'com.google.auto.service', name: 'auto-service', version: '1.0-rc2'
     addAPT group: 'com.google.auto.value', name: 'auto-value', version: '1.3'
     addAPTReq name: 'aopalliance'
     addAPTReq name: 'asm'
