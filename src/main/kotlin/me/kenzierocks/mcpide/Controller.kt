@@ -145,7 +145,7 @@ class Controller {
         })
     }
 
-    private val about: String = """MCPIDE Version 1.0.0.whatever
+    private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
                                   |Copyright © 2016 Kenzie Togami""".trimMargin()
     private val defaultDirectory: String = System.getProperty("user.home")
     private val recentExportsFile = config.file.parent / "recentExports.json"
