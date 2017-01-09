@@ -10,11 +10,9 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.CopySpec
-import org.gradle.api.java.archives.Manifest
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.StopExecutionException
 import org.gradle.api.tasks.bundling.Zip
-import org.gradle.jvm.tasks.Jar
 import org.kohsuke.github.GHRelease
 import org.kohsuke.github.GitHub
 import org.kohsuke.github.GitHubBuilder
@@ -93,12 +91,6 @@ class ReleaseFilesPlugin implements Plugin<Project> {
         }
 
         // make a shadow jar for Windows/Linux -- the gradle script is better for macOS
-        project.tasks.getByName('jar').configure { Jar task ->
-            task.manifest { Manifest manifest ->
-                manifest.attributes 'MainClass': project.property('mainClassName')
-            }
-        }
-
         Task createExe = project.tasks.getByName('createExe')
         Task shadowJar = project.tasks.getByName('shadowJar')
         createExe.dependsOn shadowJar

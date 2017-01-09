@@ -121,6 +121,17 @@ jacocoTestReport {
 }
 check.dependsOn jacocoTestReport
 
+import java.util.jar.Attributes.Name
+
+jar {
+    manifest {
+        def map = new HashMap<String, String>()
+        map.put(Name.MAIN_CLASS.toString(), project.property('mainClassName') as String)
+        map.put(Name.IMPLEMENTATION_VERSION.toString(), project.version as String)
+        attributes.putAll(map)
+    }
+}
+
 release.git {
     // release/<something> or master
     requireBranch = /release\/.+|master/
