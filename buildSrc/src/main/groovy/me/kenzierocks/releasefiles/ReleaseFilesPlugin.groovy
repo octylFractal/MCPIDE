@@ -3,9 +3,6 @@ package me.kenzierocks.releasefiles
 import com.dd.plist.NSDictionary
 import com.dd.plist.NSString
 import com.dd.plist.PropertyListParser
-import com.squareup.okhttp.Cache
-import com.squareup.okhttp.OkHttpClient
-import com.squareup.okhttp.OkUrlFactory
 import edu.sc.seis.launch4j.Launch4jPluginExtension
 import org.ajoberstar.grgit.operation.LogOp
 import org.ajoberstar.grgit.operation.OpenOp
@@ -21,7 +18,6 @@ import org.gradle.jvm.tasks.Jar
 import org.kohsuke.github.GHRelease
 import org.kohsuke.github.GitHub
 import org.kohsuke.github.GitHubBuilder
-import org.kohsuke.github.extras.OkHttpConnector
 
 import java.nio.file.DirectoryNotEmptyException
 import java.nio.file.Files
@@ -107,11 +103,6 @@ class ReleaseFilesPlugin implements Plugin<Project> {
         Task shadowJar = project.tasks.getByName('shadowJar')
         createExe.dependsOn shadowJar
 
-        Task windowsReleaseExe = project.task('windowsReleaseExe').configure { Task task ->
-            task.dependsOn createExe
-
-            task.outputs.files(createExe.outputs.files)
-        }
         project.configure(project.extensions.getByType(Launch4jPluginExtension)) { Launch4jPluginExtension ext ->
             ext.setMainClassName(project.property('mainClassName') as String)
             ext.setIcon(srcResources.resolve('icon.ico').toFile().toString())
@@ -127,17 +118,27 @@ class ReleaseFilesPlugin implements Plugin<Project> {
             ext.windowTitle = project.name
         }
 
+        Task windowsReleaseExe = project.task('windowsReleaseExe').configure { Task task ->
+            task.dependsOn createExe
+
+            task.extensions.extraProperties['outFile'] = createExe.property('dest')
+
+            task.outputs.files(createExe.outputs.files)
+        }
+
         // URJ is just the shadowJar
-        Task universalReleaseJar = project.task([type: Copy], 'universalReleaseJar').configure { Copy task ->
+        Copy universalReleaseJar = project.task([type: Copy], 'universalReleaseJar').configure { Copy task ->
             task.dependsOn shadowJar
             def shadowJarFile = shadowJar.outputs.files.first()
             def outFile = new File(releasesBase, "${project.name}-${project.version}-universal.jar")
+
+            task.extensions.extraProperties['outFile'] = outFile
 
             task.from(shadowJarFile) { CopySpec copySpec ->
                 copySpec.rename ".*", outFile.name
             }
             task.into outFile.parentFile
-        }
+        } as Copy
 
         project.task("deleteExtraLaunch4jJunk").configure { Task task ->
             task.description = "Deletes the extra launch4j lib folder"
@@ -151,21 +152,23 @@ class ReleaseFilesPlugin implements Plugin<Project> {
         }
 
         // zip the app for release
-        Task macReleaseZip = project.task([type: Zip], "macReleaseZip").configure { Zip task ->
+        Zip macReleaseZip = project.task([type: Zip], "macReleaseZip").configure { Zip task ->
             task.dependsOn macReleaseApp
             task.from(macReleaseApp.outputs.files)
 
             task.archiveName = "${project.name}-${project.version}-macOS.zip"
             task.destinationDir = releasesBase
-        }
+        } as Zip
 
         def osBundles = project.task("osBundles").configure { Task task ->
             task.dependsOn macReleaseZip, windowsReleaseExe, universalReleaseJar
             task.dependsOn "deleteExtraLaunch4jJunk"
 
-            task.outputs.files(macReleaseZip.outputs.files)
-            task.outputs.files(windowsReleaseExe.outputs.files)
-            task.outputs.files(universalReleaseJar.outputs.files)
+            task.outputs.files(
+                    macReleaseZip.outputs.files,
+                    windowsReleaseExe.property('outFile'),
+                    universalReleaseJar.property('outFile')
+            )
         }
 
         def deployOsBundles = project.task('deployOsBundles').configure { Task task ->
@@ -184,10 +187,8 @@ class ReleaseFilesPlugin implements Plugin<Project> {
                     throw new StopExecutionException("No tip commit for branch ${git.branch.current.name}")
                 }
 
-                Cache cache = new Cache(project.file("build/release-file-github-cache"), 10 * 1024 * 1024) // 10MB cache
                 GitHub gitHub = GitHubBuilder
                         .fromCredentials()
-                        .withConnector(new OkHttpConnector(new OkUrlFactory(new OkHttpClient().setCache(cache))))
                         .build()
                 def repository = gitHub.getRepository("kenzierocks/MCPIDE")
                 GHRelease rel = repository
@@ -217,11 +218,18 @@ class ReleaseFilesPlugin implements Plugin<Project> {
                         default:
                             throw new StopExecutionException("What sort of MIME type is $ext?")
                     }
-                    rel.uploadAsset(f, mime)
+                    println("Uploading asset $f of mime type $mime")
+                    try {
+                        rel.uploadAsset(f, mime)
+                    } catch (Exception e) {
+                        rel.delete()
+                        throw e
+                    }
                 }
             }
         }
 
+        project.tasks.getByName('build').dependsOn osBundles
         // Release-plugin: we must run osBundles after release is built
         project.tasks.getByName('afterReleaseBuild').dependsOn deployOsBundles
     }
