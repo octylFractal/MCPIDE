@@ -17,7 +17,5 @@ dependencies {
     compile group: 'org.gradle', name: 'gradle-core', version: '3.1'
     compile group: 'com.googlecode.plist', name: 'dd-plist', version: '1.16'
     compile group: 'org.kohsuke', name: 'github-api', version: '1.82'
-    // OkHttp version is tied to github-api version -- be wary!
-    compile group: 'com.squareup.okhttp', name: 'okhttp-urlconnection', version: '2.7.5'
     compile group: 'org.ajoberstar', name: 'grgit', version: '1.7.2'
 }
