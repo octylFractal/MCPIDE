@@ -107,6 +107,7 @@ class ReleaseFilesPlugin implements Plugin<Project> {
             ext.setMainClassName(project.property('mainClassName') as String)
             ext.setIcon(srcResources.resolve('icon.ico').toFile().toString())
             ext.outputDir = releasesFolderName // output to the build folder
+            ext.setOutfile("${project.name}-${project.version}.exe")
             ext.copyConfigurable = shadowJar.outputs.files
             ext.setJar(shadowJar.outputs.files.files.first().absolutePath)
             ext.jreRuntimeBits = '64/32'
