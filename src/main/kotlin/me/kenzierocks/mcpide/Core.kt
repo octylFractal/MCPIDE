@@ -29,6 +29,7 @@ import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Parser
 import com.beust.klaxon.boolean
 import com.beust.klaxon.obj
+import com.google.common.collect.AbstractIterator
 import com.google.common.collect.ImmutableList
 import javafx.beans.InvalidationListener
 import javafx.beans.binding.Bindings
@@ -44,9 +45,12 @@ import javafx.collections.transformation.FilteredList
 import javafx.event.EventHandler
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
+import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tab
 import javafx.scene.control.TreeItem
 import javafx.scene.paint.Color
+import javafx.scene.paint.Paint
+import javafx.scene.text.Font
 import javafx.scene.text.Text
 import javafx.scene.text.TextFlow
 import me.kenzierocks.mcpide.fx.FXMLFactory
@@ -64,6 +68,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.ArrayDeque
 import java.util.Deque
 import java.util.HashMap
 import java.util.LinkedList
@@ -147,7 +152,7 @@ class Core(val ctrl: Controller) {
         mappingFunc = {
             val tab = Tab(it.name)
             tab.properties[KEY_TAB_PATH] = it
-            tab.content = TextFlow()
+            tab.content = ScrollPane(TextFlow())
             tab.onCloseRequest = EventHandler { event ->
                 openFiles.remove(it)
             }
@@ -339,8 +344,14 @@ class Core(val ctrl: Controller) {
     }
 
     private fun getCurrentTab(): Tab? = ctrl.getTextView().selectionModel.selectedItem
-    private fun getCurrentTextFlow(): TextFlow? = getCurrentTab()?.content as? TextFlow
+    private fun getCurrentTextFlow(): TextFlow? = (getCurrentTab()?.content as? ScrollPane)?.content as? TextFlow
     private fun getCurrentPath(): Path? = getCurrentTab()?.properties?.get(KEY_TAB_PATH) as? Path
+
+    private fun createText(s: String): Text {
+        val t = Text(s)
+        t.font = Font.font("monospaced", 16.0)
+        return t
+    }
 
     fun applyRenames() {
         if (getCurrentTab() == null) {
@@ -352,50 +363,71 @@ class Core(val ctrl: Controller) {
         textFlow.children.clear()
         val renameMap = mapOf(*selRenames.values.toTypedArray())
         val textObj = tokenizeText(Files.newBufferedReader(path).use { it.readText() })
-        val mappedTexts = textObj.mapIndexed { i, text ->
-            val str = text.text
+
+        val texts = ImmutableList.builder<Text>()
+        val accText = StringBuilder()
+        textObj.forEach { text ->
+            var resultText = text
             var attachHover = false
+            var textFill: Paint? = null
             var replacementType: ReplacementType? = null
-            if (str in renameMap) {
-                text.text = renameMap[str]
-                text.fill = REPLACED_HIGHLIGHT_COLOR
-            } else if (str.startsWith(ReplacementType.FIELD.namePrefixUnderscore)) {
-                text.fill = FIELD_HIGHLIGHT_COLOR
+            if (text in renameMap) {
+                resultText = renameMap[text]!!
+                textFill = REPLACED_HIGHLIGHT_COLOR
+            } else if (text.startsWith(ReplacementType.FIELD.namePrefixUnderscore)) {
+                textFill = FIELD_HIGHLIGHT_COLOR
                 attachHover = true
                 replacementType = ReplacementType.FIELD
-            } else if (str.startsWith(ReplacementType.METHOD.namePrefixUnderscore)) {
-                text.fill = METHOD_HIGHLIGHT_COLOR
+            } else if (text.startsWith(ReplacementType.METHOD.namePrefixUnderscore)) {
+                textFill = METHOD_HIGHLIGHT_COLOR
                 attachHover = true
                 replacementType = ReplacementType.METHOD
-            } else if (str.startsWith(ReplacementType.PARAMETER.namePrefixUnderscore)) {
-                text.fill = PARAMETER_HIGHLIGHT_COLOR
+            } else if (text.startsWith(ReplacementType.PARAMETER.namePrefixUnderscore)) {
+                textFill = PARAMETER_HIGHLIGHT_COLOR
                 attachHover = true
                 replacementType = ReplacementType.PARAMETER
             }
-            if (attachHover) {
-                val rt = replacementType!!
-                RenameTooltip.install(text, rt)
+            if (textFill != null) {
+                val textWrap = createText(resultText)
+                textWrap.fill = textFill
+                texts.add(createText(accText.toString()), textWrap)
+                accText.setLength(0)
+
+                if (attachHover) {
+                    val rt = replacementType!!
+                    RenameTooltip.install(textWrap, rt)
+                }
+            } else {
+                accText.append(resultText)
             }
-            return@mapIndexed text
         }
-        textFlow.children.addAll(mappedTexts)
+        if (accText.isNotEmpty()) {
+            texts.add(createText(accText.toString()))
+        }
+        textFlow.children.addAll(texts.build())
     }
 
-    private fun tokenizeText(text: String): List<Text> {
+    private fun tokenizeText(text: String): Iterator<String> {
         var indexAfterLastMatchEnd = 0
-        val texts = ImmutableList.builder<Text>()
-        fun add(s: String) = texts.add(Text(s))
         val matcher = IDENTIFIER_PATTERN.matcher(text)
-        while (matcher.find()) {
-            add(text.substring(indexAfterLastMatchEnd, matcher.start()))
-            add(matcher.group(0))
+        return object : AbstractIterator<String>() {
+            private val q = ArrayDeque<String>()
 
-            indexAfterLastMatchEnd = matcher.end()
+            override fun computeNext(): String? {
+                if (q.isNotEmpty()) return q.removeFirst()
+                if (matcher.find()) {
+                    q.addLast(text.substring(indexAfterLastMatchEnd, matcher.start()))
+                    q.addLast(matcher.group(0))
+
+                    indexAfterLastMatchEnd = matcher.end()
+                } else if (indexAfterLastMatchEnd < text.length) {
+                    q.addLast(text.substring(indexAfterLastMatchEnd))
+                    indexAfterLastMatchEnd = text.length
+                }
+                if (q.isEmpty()) return endOfData()
+                return q.removeFirst()
+            }
         }
-        if (indexAfterLastMatchEnd < text.length) {
-            add(text.substring(indexAfterLastMatchEnd))
-        }
-        return texts.build()
     }
 
     fun filterRenames(filter: String?) {
