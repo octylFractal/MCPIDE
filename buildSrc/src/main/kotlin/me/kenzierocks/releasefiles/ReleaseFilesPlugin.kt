@@ -86,7 +86,7 @@ class ReleaseFilesPlugin : Plugin<Project> {
 
                 val infoPlistFile = srcResources.resolve("Info.plist").copyIntoDir(appDir)
                 srcResources.resolve("icon.icns").copyIntoDir(appResources)
-                val bootstrapScript = srcResources.resolve("baleout-bootstrap").copyIntoDir(appMacOs)
+                val bootstrapScript = srcResources.resolve("mcpide-bootstrap").copyIntoDir(appMacOs)
 
                 // chmod 755 mcpide-bootstrap
                 Files.setPosixFilePermissions(bootstrapScript, PosixFilePermissions.fromString("rwxr-xr-x"))

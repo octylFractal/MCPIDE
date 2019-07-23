@@ -22,6 +22,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package me.kenzierocks.mcpide.fx
 
 import com.google.common.collect.ImmutableList
@@ -92,7 +93,7 @@ object FXExecutor : AbstractExecutorService() {
 
     init {
         // if Platform.exit is called without shutdown being called, still do shutdown
-        terminationFuture.whenComplete { unit, throwable -> shutdownLock.write { shutdown = true } }
+        terminationFuture.whenComplete { _, _ -> shutdownLock.write { shutdown = true } }
     }
 
     override fun isTerminated(): Boolean = terminationFuture.isDone && allTasksCompleted
