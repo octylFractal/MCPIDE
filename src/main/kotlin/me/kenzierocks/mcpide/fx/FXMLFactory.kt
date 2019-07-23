@@ -49,7 +49,6 @@ import javafx.scene.paint.Stop
 import javafx.scene.text.TextAlignment
 import javafx.stage.Popup
 import javafx.stage.PopupWindow
-import me.kenzierocks.mcpide.IIFE
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ReplacementType
 import java.util.HashMap
@@ -133,21 +132,19 @@ class RenameListEntry(val root: Region,
 }
 
 private val SIZE = 25.0
-private val PAINTS: Map<ReplacementType, Paint> = IIFE {
-    val map = ImmutableMap.builder<ReplacementType, Paint>()
-
-    fun insertGradient(rt: ReplacementType, color1: String, color2: String) {
-        map.put(rt, RadialGradient(0.0, 0.0, 0.5, 0.5, 1.0, true, CycleMethod.NO_CYCLE,
-            Stop(0.0, Color.web(color1)), Stop(0.5, Color.web(color2))))
-    }
-
-    insertGradient(ReplacementType.FIELD, "#FF0000", "#FF9000")
-    insertGradient(ReplacementType.METHOD, "#3B00FF", "#ED00FF")
-    insertGradient(ReplacementType.PARAMETER, "#00FF5B", "#00FDFF")
-    insertGradient(ReplacementType.CUSTOM, "#0017FF", "#03CF15")
-
-    map.build()
+private fun ImmutableMap.Builder<ReplacementType, Paint>.insertGradient(
+    rt: ReplacementType, color1: String, color2: String
+) : ImmutableMap.Builder<ReplacementType, Paint> {
+    put(rt, RadialGradient(0.0, 0.0, 0.5, 0.5, 1.0, true, CycleMethod.NO_CYCLE,
+        Stop(0.0, Color.web(color1)), Stop(0.5, Color.web(color2))))
+    return this
 }
+private val PAINTS: Map<ReplacementType, Paint> = ImmutableMap.builder<ReplacementType, Paint>()
+    .insertGradient(ReplacementType.FIELD, "#FF0000", "#FF9000")
+    .insertGradient(ReplacementType.METHOD, "#3B00FF", "#ED00FF")
+    .insertGradient(ReplacementType.PARAMETER, "#00FF5B", "#00FDFF")
+    .insertGradient(ReplacementType.CUSTOM, "#0017FF", "#03CF15")
+    .build()
 
 private fun ReplacementType.newNode(): Node {
     val canvas = Canvas(SIZE, SIZE)

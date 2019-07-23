@@ -66,6 +66,9 @@ fun Map<String, String>.save(p: Path, comment: CharSequence? = null) {
  * Returns the comments, for no reason.
  */
 fun MutableMap<String, String>.load(p: Path): String {
+    if (!Files.exists(p)) {
+        return ""
+    }
     val str = StringBuilder()
     Files.newBufferedReader(p).useLines { lines ->
         lines
@@ -103,21 +106,20 @@ class ConfigKey(val config: Config, val key: String)
 
 interface Config : MutableMap<String, String> {
     companion object {
-        val GLOBAL = newConfig(IIFE {
-            val directory = IIFE {
-                val xdgCfg = System.getenv("XDG_CONFIG_HOME")
-                if (xdgCfg != null) {
-                    p(xdgCfg)
-                } else {
-                    p(System.getProperty("user.home")) / ".config"
-                }
-            } / MCPIDE.TITLE
+        private val configHome = when(val xdgCfg = System.getenv("XDG_CONFIG_HOME")) {
+            null -> p(System.getProperty("user.home")) / ".config"
+            else -> p(xdgCfg)
+        }
+        private val globalConfigFile = configHome.let {
+            val directory = configHome / MCPIDE.TITLE
             Files.createDirectories(directory)
             if (!Files.isDirectory(directory)) {
                 throw IllegalStateException("$directory is not a directory!")
             }
-            directory
-        } / "config.properties")
+            directory / "config.properties"
+        }
+
+        val GLOBAL = newConfig(globalConfigFile)
     }
 
     // Public API implemented by Proxy

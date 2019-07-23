@@ -25,17 +25,16 @@
 
 package me.kenzierocks.mcpide.handles
 
-import me.kenzierocks.mcpide.IIFE
 import java.lang.invoke.MethodHandle
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 
 
-private val LOOKUP_ANY = IIFE {
+private val LOOKUP_ANY = ({
     val lookup = MethodHandles.Lookup::class.java.getDeclaredField("IMPL_LOOKUP")
     lookup.isAccessible = true
     lookup.get(null) as MethodHandles.Lookup
-}
+})()
 
 private fun methodCall(clazz: Class<*>, methodName: String, type: MethodType, static: Boolean): MethodHandle {
     return if (static) LOOKUP_ANY.findStatic(clazz, methodName, type)
