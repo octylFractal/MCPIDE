@@ -30,12 +30,12 @@ enum class ReplacementType(val namePrefix: String?, val botCommand: String?) {
     val namePrefixUnderscore = namePrefix + "_"
 }
 
-val REPLACEMENT_TYPE_SEPARATOR = ";\u0001 replacementType="
+const val REPLACEMENT_TYPE_SEPARATOR = ";\u0001 replacementType="
 inline fun Config.forEachReplacementType(body: ((String, String, ReplacementType) -> Unit)) {
     forEach { e ->
         val (k, combinedV) = e
         val split = combinedV.split(
-            delimiters = REPLACEMENT_TYPE_SEPARATOR,
+            delimiters = *arrayOf(REPLACEMENT_TYPE_SEPARATOR),
             limit = 2
         )
         val v = split[0]

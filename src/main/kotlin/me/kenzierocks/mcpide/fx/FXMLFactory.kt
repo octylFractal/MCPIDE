@@ -78,46 +78,43 @@ class RenameListEntry(val root: Region,
 
     private var handlerIds = 0
     private val handlers = HashMap<Int, (RenameListEntry) -> Unit>()
-    private val lastValue: ObjectProperty<Pair<String, String>?>
-        = SimpleObjectProperty(this, "lastValue", null)
-    private val applicable: BooleanProperty
-        = SimpleBooleanProperty(this, "applicable", false)
-    private val replacementTypeProperty: ObjectProperty<ReplacementType>
-        = SimpleObjectProperty(this, "replacementTypeProperty", ReplacementType.PARAMETER)
+    private val lastValue: ObjectProperty<Pair<String, String>?> = SimpleObjectProperty(this, "lastValue", null)
+    private val applicable: BooleanProperty = SimpleBooleanProperty(this, "applicable", false)
+    private val replacementTypeProperty: ObjectProperty<ReplacementType> = SimpleObjectProperty(this, "replacementTypeProperty", ReplacementType.PARAMETER)
     var replacementType: ReplacementType
         get() = replacementTypeProperty.value
         set(value) = replacementTypeProperty.set(value)
 
     init {
-        submit.onAction = EventHandler { event ->
+        submit.onAction = EventHandler {
             lastValue.value = Pair(oldName.text, newName.text)
             applicable.value = true
             evt()
         }
         submit.disableProperty().bind(applicable)
         revert.disableProperty().bind(lastValue.isNull.or(applicable))
-        revert.onAction = EventHandler { event ->
+        revert.onAction = EventHandler {
             lastValue.value?.let {
                 oldName.text = it.first
                 newName.text = it.second
                 applicable.value = true
             }
         }
-        oldName.textProperty().addListener { obs ->
+        oldName.textProperty().addListener(InvalidationListener {
             applicable.value = false
             evt()
-        }
-        newName.textProperty().addListener { obs ->
+        })
+        newName.textProperty().addListener(InvalidationListener {
             applicable.value = false
             evt()
-        }
+        })
 
         configureReplacementTypeButton(replacementTypeProperty, typeChoice)
         replacementTypeProperty.addListener(InvalidationListener { evt() })
     }
 
     private fun evt() {
-        handlers.forEach { i, callback ->
+        handlers.forEach { (_, callback) ->
             callback(this)
         }
     }
@@ -128,7 +125,7 @@ class RenameListEntry(val root: Region,
     fun getOldName(): String = oldName.text
     fun getNewName(): String = newName.text
     fun addHandler(callback: (RenameListEntry) -> Unit): Int {
-        handlers.put(handlerIds++, callback)
+        handlers[handlerIds++] = callback
         return handlerIds - 1
     }
 
@@ -170,7 +167,7 @@ private fun configureReplacementTypeButton(replType: ObjectProperty<ReplacementT
     btn.graphicProperty().bind(replType.map { it.newNode() })
     btn.padding = Insets(2.0)
 
-    btn.onAction = EventHandler { evt ->
+    btn.onAction = EventHandler {
         if (popup.isShowing) {
             popup.hide()
             return@EventHandler

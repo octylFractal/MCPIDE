@@ -109,8 +109,8 @@ class MultiList<T>(vararg lists: ObservableList<T>) : ObservableListBase<T>() {
     }
 
     override fun get(index: Int): T? {
-        val (subList, offset) = listRangeMap.get(index) ?:
-            throw IndexOutOfBoundsException("$index is larger than ${size - 1}")
+        val (subList, offset) = listRangeMap.get(index)
+            ?: throw IndexOutOfBoundsException("$index is larger than ${size - 1}")
         return subList[index - offset]
     }
 

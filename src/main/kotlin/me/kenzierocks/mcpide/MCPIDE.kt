@@ -56,8 +56,8 @@ class MCPIDE : Application() {
             return HANDLE_RESOLVE_NAME.call(resource)!!
         }
 
-        fun getResource(resource: String)
-            = MCPIDE::class.java.getResource(resource) ?: throw IllegalStateException("Missing resource: ${resolveName(resource)}")
+        fun getResource(resource: String) = MCPIDE::class.java.getResource(resource)
+            ?: throw IllegalStateException("Missing resource: ${resolveName(resource)}")
 
         fun <R : Parent> loadParent(resource: String): R {
             return FXMLLoader.load(getResource(resource))

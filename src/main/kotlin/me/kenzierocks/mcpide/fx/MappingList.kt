@@ -64,6 +64,8 @@ class MappingList<O, N>(val originalList: ObservableList<out O>,
     }
 
     // direct mapping -- no index changes
+    override fun getViewIndex(index: Int) = index
+
     override fun getSourceIndex(index: Int) = index
 
     fun invalidateCaches() {

@@ -49,5 +49,4 @@ class HandleAddParams<C, R : Any>(val clazz: Class<C>, val methodName: String) {
     fun buildStatic() = staticMethodCall(clazz, methodName, returnType, *parameters)
 }
 
-operator fun <C : Any> KClass<C>.get(methodName: String)
-    = HandleAddParams<C, Any>(this.java, methodName)
+operator fun <C : Any> KClass<C>.get(methodName: String) = HandleAddParams<C, Any>(this.java, methodName)

@@ -95,7 +95,7 @@ class ConfigKey(val config: Config, val key: String)
     override fun getBean() = config
 
     init {
-        addListener { obs, old, new -> config[key] = new }
+        addListener { _, _, new -> config[key] = new }
     }
 
 }
@@ -150,7 +150,7 @@ fun ObjectExpression<Config?>.observable(key: String): ObjectBinding<ConfigKey?>
 }
 
 
-fun ObjectExpression<Path?>.configFileProperty(bean: Any? = null, name: String? = null) : ReadOnlyObjectProperty<Config?> {
+fun ObjectExpression<Path?>.configFileProperty(bean: Any? = null, name: String? = null): ReadOnlyObjectProperty<Config?> {
     val wrapper = ReadOnlyObjectWrapper<Config?>(bean, name)
     wrapper.bind(map {
         if (it == null) return@map null
@@ -159,6 +159,7 @@ fun ObjectExpression<Path?>.configFileProperty(bean: Any? = null, name: String? 
     })
     return wrapper.readOnlyProperty
 }
+
 fun newConfig(configFile: Path): Config {
     return ObservableBasedConfig(configFile = configFile)
 }

@@ -27,8 +27,6 @@ package me.kenzierocks.mcpide
 import com.beust.klaxon.JsonArray
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Parser
-import com.beust.klaxon.boolean
-import com.beust.klaxon.obj
 import com.google.common.collect.AbstractIterator
 import com.google.common.collect.ImmutableList
 import javafx.beans.InvalidationListener
@@ -82,7 +80,7 @@ class Core(val ctrl: Controller) {
 
     companion object {
         private val DATA_FOLDER = ".mcpide"
-        private val PARSER = Parser()
+        private val PARSER = Parser.default()
 
         private val REPLACED_HIGHLIGHT_COLOR = Color.INDIGO
         private val FIELD_HIGHLIGHT_COLOR = Color.rgb(0x8E, 0x1E, 0x69)
@@ -153,7 +151,7 @@ class Core(val ctrl: Controller) {
             val tab = Tab(it.name)
             tab.properties[KEY_TAB_PATH] = it
             tab.content = ScrollPane(TextFlow())
-            tab.onCloseRequest = EventHandler { event ->
+            tab.onCloseRequest = EventHandler { _ ->
                 openFiles.remove(it)
             }
             tab
@@ -211,13 +209,13 @@ class Core(val ctrl: Controller) {
         projectPath.value = base / DATA_FOLDER
         try {
             Files.createDirectory(projectPath.value)
-        } catch(e: FileAlreadyExistsException) {
+        } catch (e: FileAlreadyExistsException) {
         }
         ctrl.getRenameList().items = filteredRenameEntries
         loadReplacements()
         loadFileTree(base)
         val ft = ctrl.getFileTree()
-        treeModListener = ChangeListener { obs, old, new ->
+        treeModListener = ChangeListener { _, _, _ ->
             val data = serializeRoot(ft.root)
             GZIPOutputStream(Files.newOutputStream(fileTreeJson.value)).use {
                 it.write(data.toJsonString().toByteArray(StandardCharsets.UTF_8))
@@ -276,7 +274,7 @@ class Core(val ctrl: Controller) {
         val ft = ctrl.getFileTree()
         ft.root = treeStack.pop()
         ft.editingItemProperty()
-            .addListener { obs, old, new ->
+            .addListener { _, _, new ->
                 if (new != null && Files.isRegularFile(new.value)) {
                     insertTab(new.value)
                 }
@@ -289,7 +287,7 @@ class Core(val ctrl: Controller) {
         val rle = FXMLFactory.createRenameListEntry()
         rle.replacementType = replacementType
         renameEntries.add(rle)
-        rle.addHandler { rle ->
+        rle.addHandler {
             if (rle.isApplicable()) {
                 val pair = rle.getLastValue() ?: Pair("", "")
                 val (old, new) = pair
@@ -305,7 +303,7 @@ class Core(val ctrl: Controller) {
                 applyRenames()
             }
         }
-        rle.delete.onAction = EventHandler { event ->
+        rle.delete.onAction = EventHandler {
             val dialog = Alert(Alert.AlertType.CONFIRMATION, "Are you sure you want to delete this rename?")
             dialog.showAndWait().filter {
                 it == ButtonType.OK

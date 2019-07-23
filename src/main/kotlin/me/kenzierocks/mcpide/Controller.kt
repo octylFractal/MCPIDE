@@ -157,15 +157,15 @@ class Controller {
         core = Core(this)
         initialDirectoryExport = core.configProperty.observable("initial_directory@export")
         val rl = getRenameList()
-        rl.cellFactory = Callback { listView ->
+        rl.cellFactory = Callback {
             RLECell()
         }
         val ft = getFileTree()
-        ft.cellFactory = Callback { treeView ->
+        ft.cellFactory = Callback {
             PathCell()
         }
 
-        searchRenames.textProperty().addListener { obs, old, new ->
+        searchRenames.textProperty().addListener { _, _, new ->
             core.filterRenames(new)
         }
 
@@ -190,7 +190,7 @@ class Controller {
         recentExportsFile.touch()
         recentExports += (Files.newInputStream(recentExportsFile).use {
             try {
-                Parser().parse(it)
+                Parser.default().parse(it)
             } catch (e: RuntimeException) {
                 // Pass: this is a Klaxon error
                 RuntimeException("warning: unable to load recent export locations", e).printStackTrace()

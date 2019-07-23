@@ -84,8 +84,7 @@ class MethodCallInstance<C, out R>(clazz: Class<C>,
 
     private val mh = methodCall(clazz, methodName, type, false)
 
-    override fun bind(instance: C): MethodCall<R>
-        = MethodCallStatic<C, R>(mh.bindTo(instance))
+    override fun bind(instance: C): MethodCall<R> = MethodCallStatic<C, R>(mh.bindTo(instance))
 
     // This call is supported if you pass the instance as the first arg
     @Suppress("UNCHECKED_CAST")

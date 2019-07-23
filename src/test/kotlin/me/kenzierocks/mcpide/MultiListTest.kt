@@ -49,7 +49,7 @@ class MultiListTest {
 
     @Nested
     @DisplayName("is empty when created with")
-    inner internal class IsEmpty {
+    internal inner class IsEmpty {
 
         @DisplayName("no lists")
         @Test
@@ -87,7 +87,7 @@ class MultiListTest {
 
     @Nested
     @DisplayName("has a size of 1 when created with")
-    inner internal class Size1 {
+    internal inner class Size1 {
 
         @DisplayName("a single-element list")
         @Test
@@ -125,7 +125,7 @@ class MultiListTest {
 
     @Nested
     @DisplayName("properly offsets changes from sub-lists")
-    inner internal class OffsetsChanges {
+    internal inner class OffsetsChanges {
 
         @DisplayName("with a single sub-list")
         @Test
@@ -272,19 +272,18 @@ private fun <E> freezeChange(change: ListChangeListener.Change<E>): ListChangeLi
         fun duplicateChange() {
             beginChange()
             while (change.next()) {
-                if (change.wasPermutated()) {
-                    val permRange = change.from..(change.to - 1)
-                    val permArray = IntArray(permRange.count())
-                    for (i in permRange) {
-                        permArray[i - change.from] = change.getPermutation(i)
+                when {
+                    change.wasPermutated() -> {
+                        val permRange = change.from until change.to
+                        val permArray = IntArray(permRange.count())
+                        for (i in permRange) {
+                            permArray[i - change.from] = change.getPermutation(i)
+                        }
+                        nextPermutation(change.from, change.to, permArray)
                     }
-                    nextPermutation(change.from, change.to, permArray)
-                } else if (change.wasAdded()) {
-                    nextAdd(change.from, change.to)
-                } else if (change.wasRemoved()) {
-                    nextRemove(change.from, change.removed)
-                } else if (change.wasUpdated()) {
-                    nextUpdate(change.from)
+                    change.wasAdded() -> nextAdd(change.from, change.to)
+                    change.wasRemoved() -> nextRemove(change.from, change.removed)
+                    change.wasUpdated() -> nextUpdate(change.from)
                 }
             }
             change.reset()
@@ -298,6 +297,25 @@ private fun <E> freezeChange(change: ListChangeListener.Change<E>): ListChangeLi
         override fun listIterator(index: Int) = super.listIterator(index)
 
         override fun subList(fromIndex: Int, toIndex: Int) = super.subList(fromIndex, toIndex)
+        override fun contains(element: E): Boolean {
+            return copy.contains(element)
+        }
+
+        override fun containsAll(elements: Collection<E>): Boolean {
+            return copy.containsAll(elements)
+        }
+
+        override fun indexOf(element: E): Int {
+            return copy.indexOf(element)
+        }
+
+        override fun isEmpty(): Boolean {
+            return copy.isEmpty()
+        }
+
+        override fun lastIndexOf(element: E): Int {
+            return copy.lastIndexOf(element)
+        }
     }
     var frozenChange: ListChangeListener.Change<out E>? = null
     list.addListener(ListChangeListener { frozenChange = it })
