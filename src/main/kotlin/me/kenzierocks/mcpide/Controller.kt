@@ -25,83 +25,70 @@
 
 package me.kenzierocks.mcpide
 
-import com.beust.klaxon.JsonArray
-import com.beust.klaxon.Parser
-import com.google.common.collect.ImmutableList
+import com.github.javaparser.TokenRange
+import com.google.common.base.Throwables
 import javafx.application.Platform
-import javafx.beans.InvalidationListener
-import javafx.beans.binding.Bindings
-import javafx.beans.binding.ObjectBinding
-import javafx.collections.FXCollections
-import javafx.collections.ListChangeListener
-import javafx.collections.ObservableList
-import javafx.css.Styleable
-import javafx.event.ActionEvent
-import javafx.event.EventHandler
 import javafx.fxml.FXML
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
-import javafx.scene.control.ListCell
-import javafx.scene.control.ListView
-import javafx.scene.control.Menu
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
+import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
-import javafx.scene.control.TextField
 import javafx.scene.control.TreeCell
+import javafx.scene.control.TreeItem
 import javafx.scene.control.TreeView
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
-import javafx.scene.input.KeyCharacterCombination
-import javafx.scene.input.KeyCombination
 import javafx.stage.DirectoryChooser
-import javafx.stage.FileChooser
 import javafx.util.Callback
-import me.kenzierocks.mcpide.fx.MappingList
-import me.kenzierocks.mcpide.fx.MultiList
-import me.kenzierocks.mcpide.fx.RenameListEntry
-import me.kenzierocks.mcpide.fx.map
-import me.kenzierocks.mcpide.pathext.div
-import me.kenzierocks.mcpide.pathext.touch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.kenzierocks.mcpide.comms.ExportMappings
+import me.kenzierocks.mcpide.comms.LoadProject
+import me.kenzierocks.mcpide.comms.ModelMessage
+import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.UpdateMappings
+import me.kenzierocks.mcpide.comms.ViewComms
+import me.kenzierocks.mcpide.comms.ViewMessage
+import me.kenzierocks.mcpide.comms.apply
+import me.kenzierocks.mcpide.fx.JavaEditorArea
+import mu.KotlinLogging
 import java.io.File
-import java.io.PrintWriter
+import java.io.IOException
+import java.io.InputStreamReader
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CharsetDecoder
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.MalformedInputException
+import java.nio.charset.StandardCharsets
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 
+class Controller(
+    private val app: MCPIDE,
+    private val viewComms: ViewComms,
+    private val workerScope: CoroutineScope,
+    private val viewScope: CoroutineScope
+) {
 
-private val idPrefixComputeFunction = lru<Class<*>, String>(10, {
-    var upper = false
-    val b = StringBuilder()
-    for (char in it.simpleName) {
-        if (char.isUpperCase()) {
-            if (!upper && b.isNotEmpty()) {
-                b.append('-')
-            }
-            upper = true
-            b.append(char.toLowerCase())
-        } else {
-            upper = false
-            b.append(char)
+    companion object {
+        private val TREE_ITEM_ALPHABETICAL = Comparator.comparing<TreeItem<Path>, Path> {
+            it.value
         }
     }
-    return@lru b.toString()
-})
-private val unprefixedIdComputeFunction = lru<Pair<String, String>?, String?>(100, {
-    val (id, prefix) = it ?: return@lru null
-    return@lru id.replace(prefix + "-", "")
-})
-private val Styleable.idPrefix: String get() = idPrefixComputeFunction(javaClass)
-private val Styleable.unprefixId: String? get() = unprefixedIdComputeFunction(id?.to(idPrefix))
-private fun Styleable.unprefixIdEquals(unprefixedId: String): Boolean {
-    return this.unprefixId == unprefixedId
-}
 
-class Controller {
-
-    private val config = Config.GLOBAL
-    private val openProjectKey = config observable "open_project"
-    private val openProjectAsPath = openProjectKey.map { Paths.get(it).toRealPath() }
+    private val logger = KotlinLogging.logger { }
 
     @FXML
     private lateinit var menuBar: MenuBar
@@ -111,99 +98,23 @@ class Controller {
     private lateinit var fileTree: TreeView<Path>
     @FXML
     private lateinit var textView: TabPane
-    @FXML
-    private lateinit var renameList: ListView<RenameListEntry>
-    @FXML
-    private lateinit var searchRenames: TextField
-    @FXML
-    private lateinit var recentExportsMenu: Menu
-    @FXML
-    private lateinit var recentExportsMenuItem: MenuItem
-    private val recentExports: ObservableList<Path> = FXCollections.observableArrayList()
-    private val idNumbers = (0..Integer.MAX_VALUE).iterator()
-    private val recentExportsMenuItemList = MappingList(recentExports,
-        { path ->
-            val mi = MenuItem(openProjectAsPath.value.relativize(path.toAbsolutePath()).toString())
-            mi.onAction = EventHandler { export(it) }
-            mi.id = mi.text.filter(Char::isJavaIdentifierPart) + idNumbers.nextInt()
-            mi
-        })
-
-    init {
-        val META_PLUS_E = KeyCharacterCombination("E", KeyCombination.META_DOWN)
-        recentExportsMenuItemList.addListener(ListChangeListener { change ->
-            while (change.next()) {
-                if (change.wasAdded()) {
-                    if (change.from == 0) {
-                        change.addedSubList[0].accelerator = META_PLUS_E
-                        change.list.elementAtOrNull(change.to)?.accelerator = null
-                    }
-                }
-            }
-        })
-        openProjectKey.addListener(InvalidationListener {
-            recentExportsMenuItemList.invalidateCaches()
-        })
-    }
 
     private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
                                   |Copyright © 2016 Kenzie Togami""".trimMargin()
-    private val defaultDirectory: String = System.getProperty("user.home")
-    private val recentExportsFile = config.file.parent / "recentExports.json"
-    private lateinit var core: Core
-    private lateinit var initialDirectoryExport: ObjectBinding<ConfigKey?>
+    private var defaultDirectory: String = System.getProperty("user.home")
+    private val mappings = mutableMapOf<String, SrgMapping>()
 
     @FXML
     fun initialize() {
-        core = Core(this)
-        initialDirectoryExport = core.configProperty.observable("initial_directory@export")
-        val rl = getRenameList()
-        rl.cellFactory = Callback {
-            RLECell()
-        }
-        val ft = getFileTree()
-        ft.cellFactory = Callback {
-            PathCell()
-        }
-
-        searchRenames.textProperty().addListener { _, _, new ->
-            core.filterRenames(new)
-        }
-
-        // Recent exports menu has three parts
-        // The before (the label menu item, recentExportsMenuItem)
-        val relBefore = FXCollections.unmodifiableObservableList(
-            FXCollections.observableList(listOf(recentExportsMenuItem))
-        )
-        // The after (anything else after that)
-        val recentExportsIndex = recentExportsMenu.items.indexOf(recentExportsMenuItem)
-        val relAfter = FXCollections.observableList(
-            ImmutableList.copyOf(
-                recentExportsMenu.items.subList(recentExportsIndex + 1, recentExportsMenu.items.size)
-            )
-        )
-        // And the middle (the dynamically mapped list) (declared above)
-
-        // Combine into a single, auto-updating list
-        val recentExportsMenuList = MultiList(relBefore, recentExportsMenuItemList, relAfter)
-        Bindings.bindContent(recentExportsMenu.items, recentExportsMenuList)
-
-        recentExportsFile.touch()
-        recentExports += (Files.newInputStream(recentExportsFile).use {
-            try {
-                Parser.default().parse(it)
-            } catch (e: RuntimeException) {
-                // Pass: this is a Klaxon error
-                RuntimeException("warning: unable to load recent export locations", e).printStackTrace()
-                JsonArray<Any>()
+        fileTree.isEditable = false
+        fileTree.cellFactory = Callback {
+            PathCell().also {
+                it.setOnMouseClicked { e ->
+                    if (e.clickCount == 2 && it.item != null && !Files.isDirectory(it.item)) {
+                        openFile(it.item)
+                    }
+                }
             }
-        } as JsonArray<*>).map { Paths.get(it.toString()) }
-        recentExports.addListener(InvalidationListener {
-            Files.write(recentExportsFile, JsonArray(recentExports.map(Any::toString)).toJsonString(true).toByteArray())
-        })
-
-        openProjectKey.value?.let { open ->
-            core.loadProject(Paths.get(open))
         }
 
         if (System.getProperty("os.name").contains("mac", ignoreCase = true)) {
@@ -211,82 +122,108 @@ class Controller {
         }
     }
 
-    fun getFileTree(): TreeView<Path> = fileTree
-    fun getTextView(): TabPane = textView
-    fun getRenameList(): ListView<RenameListEntry> = renameList
+    fun handleMessage(viewMessage: ViewMessage) {
+        exhaustive(when (viewMessage) {
+            is OpenInFileTree -> expandDirectory(viewMessage.directory)
+            is UpdateMappings -> mappings.apply(viewMessage)
+        })
+    }
+
+    private fun expandDirectory(directory: Path) {
+        var currentParentNode = TreeItem(directory)
+        fileTree.root = currentParentNode
+
+        Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (dir != directory) {
+                    val newNode = TreeItem(dir)
+                    currentParentNode.children.add(newNode)
+                    currentParentNode = newNode
+                }
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun postVisitDirectory(dir: Path?, exc: IOException?): FileVisitResult {
+                currentParentNode.children.sortWith(TREE_ITEM_ALPHABETICAL)
+                if (dir != directory) {
+                    currentParentNode = currentParentNode.parent
+                }
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                currentParentNode.children.add(TreeItem(file))
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
+                logger.warn(exc) { "Failed to visit file $file" }
+                return FileVisitResult.CONTINUE
+            }
+        })
+    }
+
+    private fun openFile(path: Path) {
+        // read in worker thread for UI responsiveness :)
+        val contentDeferred = workerScope.async {
+            readText(path)
+        }
+        viewScope.launch {
+            val content = try {
+                contentDeferred.await()
+            } catch (e: Exception) {
+                "Error loading content:\n" + Throwables.getStackTraceAsString(e)
+            }
+            val editor = JavaEditorArea()
+            editor.text = content
+            val tab = Tab("${path.fileName}", editor)
+            textView.tabs.add(tab)
+            textView.selectionModel.select(tab)
+            val highlighting = highlight(content)
+            highlighting.consumeEach {
+                editor.styleTokenRange(it.style, it.tokenRange)
+            }
+        }
+    }
+
+    private data class Highlight(val style: String, val tokenRange: TokenRange)
+
+    private fun highlight(text: String): ReceiveChannel<Highlight> {
+        return workerScope.produce {
+
+        }
+    }
+
+    private suspend fun readText(path: Path): String {
+        return withContext(Dispatchers.IO) {
+            try {
+                Files.readString(path, StandardCharsets.UTF_8)
+            } catch (e: CharacterCodingException) {
+//                "Error: Binary files not supported."
+                throw e
+            }
+        }
+    }
+
+    private fun sendMessage(modelMessage: ModelMessage) {
+        viewComms.modelChannel.sendBlocking(modelMessage)
+    }
 
     @FXML
     fun loadDirectory() {
         val fileSelect = DirectoryChooser()
         fileSelect.title = "Select a Project"
-        fileSelect.initialDirectory = File(config["initial_directory@project"] ?: defaultDirectory)
-        val selected: File = fileSelect.showDialog(MCPIDE.INSTANCE.stage) ?: return
+        fileSelect.initialDirectory = File(defaultDirectory)
+        val selected: File = fileSelect.showDialog(app.stage) ?: return
         if (selected.parentFile != fileSelect.initialDirectory) {
-            config["initial_directory@project"] = selected.parent
+            defaultDirectory = selected.parent
         }
-        config["open_project"] = selected.absolutePath
-        core.loadProject(selected.toPath())
+        sendMessage(LoadProject(selected.toPath()))
     }
 
     @FXML
-    fun export(event: ActionEvent) {
-        val menuItem = event.source as? MenuItem
-        if (menuItem == null) {
-            System.err.println("Source was unexpectedly ${event.source?.javaClass}!")
-            return
-        }
-        if (menuItem.unprefixIdEquals("to")) {
-            val fileSelect = FileChooser()
-            fileSelect.title = "Select Export Location"
-            // Use project's config for export locations
-            fileSelect.initialDirectory = File(initialDirectoryExport.value?.value ?: defaultDirectory)
-            fileSelect.extensionFilters.addAll(
-                FileChooser.ExtensionFilter("Text Files", "*.txt"),
-                FileChooser.ExtensionFilter("All Files", "*.*")
-            )
-            val selected = (fileSelect.showSaveDialog(MCPIDE.INSTANCE.stage) ?: return).toPath()
-            if (selected.parent.toFile() != fileSelect.initialDirectory) {
-                initialDirectoryExport.value?.value = selected.parent.toString()
-            }
-            val open_project = openProjectAsPath.value
-            recentExports.add(0, if (selected.startsWith(open_project)) {
-                open_project.relativize(selected)
-            } else {
-                selected.toAbsolutePath()
-            })
-            exportTo(selected)
-        } else {
-            val index = recentExportsMenuItemList.indexOf(menuItem)
-            if (index == -1) {
-                System.err.println("Error: $menuItem not found in $recentExportsMenuItemList")
-            }
-            val file = recentExports[index]
-            exportTo(file)
-            recentExports.add(0, recentExports.removeAt(index))
-        }
-    }
-
-    private fun exportTo(file: Path) {
-        file.toFile().bufferedWriter().use { w ->
-            val pw = PrintWriter(w)
-            core.getReplacements().forEachReplacementType { k, v, replacementType ->
-                if (replacementType == ReplacementType.CUSTOM) {
-                    return@forEachReplacementType
-                }
-                val pfx = replacementType.namePrefixUnderscore
-                val fixedK =
-                    if (!k.startsWith(pfx)) pfx + k
-                    else k
-                pw.println("!${replacementType.botCommand} $fixedK $v")
-            }
-            pw.flush()
-        }
-        System.err.println("Wrote exports to ${file.toAbsolutePath()}")
-    }
-
-    @FXML
-    fun addRename() {
-        core.addRenameListEntry()
+    fun export() {
+        sendMessage(ExportMappings)
     }
 
     @FXML
@@ -297,7 +234,7 @@ class Controller {
     @FXML
     fun about() {
         val about = Dialog<Void>()
-        about.title = "About " + MCPIDE.TITLE
+        about.title = "About " + app.stage.title
         about.dialogPane.buttonTypes.add(ButtonType.CLOSE)
         about.dialogPane.contentText = this.about
         about.show()
@@ -310,18 +247,10 @@ class Controller {
     }
 }
 
-class RLECell : ListCell<RenameListEntry>() {
-    override fun updateItem(item: RenameListEntry?, empty: Boolean) {
-        super.updateItem(item, empty)
-
-        graphic = if (empty || item == null) null else item.root
-    }
-}
-
 class PathCell : TreeCell<Path>() {
     companion object {
         private fun image(path: String): Image {
-            return Image(MCPIDE.getResource(path).toString(), 16.0, 16.0, true, true)
+            return Image(PathCell::class.java.getResource(path).toString(), 16.0, 16.0, true, true)
         }
 
         //language=file-reference

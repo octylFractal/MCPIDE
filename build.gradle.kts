@@ -13,7 +13,7 @@ plugins {
     id("com.techshroom.release-files")
 }
 
-application.mainClassName = "me.kenzierocks.mcpide.MCPIDE"
+application.mainClassName = "me.kenzierocks.mcpide.MCPIDEKt"
 
 inciseBlue {
     util {
@@ -25,14 +25,54 @@ inciseBlue {
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions {
+        jvmTarget = "1.8"
+        freeCompilerArgs = listOf(
+            "-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi",
+            "-Xuse-experimental=kotlinx.io.core.ExperimentalIoApi"
+        )
+    }
 }
 
 dependencies {
-    "implementation"("org.slf4j:slf4j-api:1.7.25")
     "implementation"(kotlin("stdlib-jdk8"))
-    "implementation"("com.beust:klaxon:5.0.9")
+    commonLib("org.jetbrains.kotlinx", "kotlinx-coroutines", "1.3.0-RC") {
+        "implementation"(lib("core"))
+        "implementation"(lib("jdk8"))
+        "implementation"(lib("javafx"))
+    }
+    "implementation"("org.jetbrains.kotlinx", "kotlinx-coroutines-io-jvm", "0.1.12")
+    "implementation"("io.github.microutils:kotlin-logging:1.6.26")
+    commonLib("ch.qos.logback", "logback", "1.2.3") {
+        "implementation"(lib("core"))
+        "implementation"(lib("classic"))
+    }
     "implementation"("com.google.guava:guava:28.0-jre")
+    "implementation"("org.koin:koin-core:2.0.1")
+    "implementation"("org.fxmisc.richtext:richtextfx:0.10.1")
+    commonLib("com.github.javaparser", "javaparser", "3.14.8") {
+        "implementation"(lib("core"))
+        "implementation"(lib("symbol-solver-core"))
+    }
+
+    val jacksonVersion = "2.9.9"
+    "implementation"("com.fasterxml.jackson.core", "jackson-databind", "$jacksonVersion.1")
+    commonLib("com.fasterxml.jackson.core", "jackson", jacksonVersion) {
+        "implementation"(lib("core"))
+        "implementation"(lib("annotations"))
+    }
+    commonLib("com.fasterxml.jackson.module", "jackson-module", jacksonVersion) {
+        "implementation"(lib("kotlin"))
+        "implementation"(lib("parameter-names"))
+    }
+    commonLib("com.fasterxml.jackson.datatype", "jackson-datatype", jacksonVersion) {
+        "implementation"(lib("guava"))
+        "implementation"(lib("jdk8"))
+    }
+    commonLib("com.fasterxml.jackson.dataformat", "jackson-dataformat", jacksonVersion) {
+        "implementation"(lib("csv"))
+    }
 
     commonLib("org.junit.jupiter", "junit-jupiter", "5.5.1") {
         "testImplementation"(lib("api"))
