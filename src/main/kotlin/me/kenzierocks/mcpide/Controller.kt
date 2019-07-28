@@ -26,7 +26,6 @@
 package me.kenzierocks.mcpide
 
 import com.github.javaparser.TokenRange
-import com.google.common.base.Throwables
 import javafx.application.Platform
 import javafx.fxml.FXML
 import javafx.scene.control.ButtonType
@@ -49,6 +48,10 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.comms.ExportMappings
@@ -61,19 +64,19 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.apply
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import mu.KotlinLogging
+import org.fxmisc.flowless.VirtualizedScrollPane
 import java.io.File
 import java.io.IOException
-import java.io.InputStreamReader
 import java.nio.charset.CharacterCodingException
-import java.nio.charset.CharsetDecoder
-import java.nio.charset.CodingErrorAction
-import java.nio.charset.MalformedInputException
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.Scanner
+import java.util.stream.Collectors.joining
 
 class Controller(
     private val app: MCPIDE,
@@ -100,7 +103,7 @@ class Controller(
     private lateinit var textView: TabPane
 
     private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
-                                  |Copyright © 2016 Kenzie Togami""".trimMargin()
+                                  |Copyright © 2019 Kenzie Togami""".trimMargin()
     private var defaultDirectory: String = System.getProperty("user.home")
     private val mappings = mutableMapOf<String, SrgMapping>()
 
@@ -110,7 +113,7 @@ class Controller(
         fileTree.cellFactory = Callback {
             PathCell().also {
                 it.setOnMouseClicked { e ->
-                    if (e.clickCount == 2 && it.item != null && !Files.isDirectory(it.item)) {
+                    if (e.clickCount == 2 && isValidPath(it.item)) {
                         openFile(it.item)
                     }
                 }
@@ -122,16 +125,23 @@ class Controller(
         }
     }
 
-    fun handleMessage(viewMessage: ViewMessage) {
+    private fun isValidPath(path: Path?) : Boolean {
+        return path != null && Files.exists(path) && !Files.isDirectory(path)
+    }
+
+    suspend fun handleMessage(viewMessage: ViewMessage) {
         exhaustive(when (viewMessage) {
-            is OpenInFileTree -> expandDirectory(viewMessage.directory)
+            is OpenInFileTree -> {
+                val dirTree = workerScope.async { expandDirectory(viewMessage.directory) }
+                fileTree.root = TreeItem(Paths.get("Loading project files..."))
+                fileTree.root = dirTree.await()
+            }
             is UpdateMappings -> mappings.apply(viewMessage)
         })
     }
 
-    private fun expandDirectory(directory: Path) {
+    private fun expandDirectory(directory: Path) : TreeItem<Path> {
         var currentParentNode = TreeItem(directory)
-        fileTree.root = currentParentNode
 
         Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
@@ -161,29 +171,47 @@ class Controller(
                 return FileVisitResult.CONTINUE
             }
         })
+
+        return currentParentNode
     }
 
     private fun openFile(path: Path) {
         // read in worker thread for UI responsiveness :)
-        val contentDeferred = workerScope.async {
-            readText(path)
-        }
         viewScope.launch {
-            val content = try {
-                contentDeferred.await()
-            } catch (e: Exception) {
-                "Error loading content:\n" + Throwables.getStackTraceAsString(e)
-            }
-            val editor = JavaEditorArea()
-            editor.text = content
-            val tab = Tab("${path.fileName}", editor)
+            val editor = JavaEditorArea(path)
+            editor.text = "Loading file..."
+            val tab = Tab("${path.fileName}", VirtualizedScrollPane(editor))
             textView.tabs.add(tab)
             textView.selectionModel.select(tab)
+            triggerRefresh(editor)
+        }
+    }
+
+    private fun triggerRefresh(editor: JavaEditorArea) {
+        workerScope.launch {
+            val localMappings = mappings.toMap()
+            val content = readLines(editor.path)
+                .map { line -> line.replaceMappings(localMappings) }
+                .fold(StringBuilder()) { sb, line ->
+                    sb.append(line)
+                }.toString()
+            val textSetting = viewScope.async { editor.text = content }
             val highlighting = highlight(content)
+            textSetting.await()
             highlighting.consumeEach {
                 editor.styleTokenRange(it.style, it.tokenRange)
             }
         }
+    }
+
+    private fun String.replaceMappings(mappings: Map<String, SrgMapping>): String {
+        val s = Scanner(this)
+        s.useDelimiter(" ")
+        return s.tokens()
+            .map {
+                (mappings[it]?.newName) ?: it
+            }
+            .collect(joining(" "))
     }
 
     private data class Highlight(val style: String, val tokenRange: TokenRange)
@@ -194,13 +222,19 @@ class Controller(
         }
     }
 
-    private suspend fun readText(path: Path): String {
+    private suspend fun readLines(path: Path): Flow<String> {
         return withContext(Dispatchers.IO) {
-            try {
-                Files.readString(path, StandardCharsets.UTF_8)
-            } catch (e: CharacterCodingException) {
-//                "Error: Binary files not supported."
-                throw e
+            flow {
+                @Suppress("BlockingMethodInNonBlockingContext")
+                Files.newBufferedReader(path, StandardCharsets.UTF_8).useLines { lines ->
+                    try {
+                        lines.iterator().forEach {
+                            emit(it + "\n")
+                        }
+                    } catch (e: CharacterCodingException) {
+                        emit("...Error reading content, is this a binary file?")
+                    }
+                }
             }
         }
     }

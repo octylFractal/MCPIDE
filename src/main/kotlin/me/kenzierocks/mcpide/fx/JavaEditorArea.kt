@@ -4,9 +4,10 @@ import com.github.javaparser.Position
 import com.github.javaparser.TokenRange
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.LineNumberFactory
+import java.nio.file.Path
 import java.util.Scanner
 
-class JavaEditorArea : CodeArea() {
+class JavaEditorArea(var path: Path) : CodeArea() {
     private var lineOffsets: IntArray? = null
 
     init {
