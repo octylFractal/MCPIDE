@@ -1,6 +1,7 @@
 package me.kenzierocks.mcpide
 
 import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import javafx.fxml.FXMLLoader
 import javafx.util.Callback
@@ -55,9 +56,15 @@ val httpModule = module {
     }
 }
 
-val xmlModule = module {
+val jacksonModule = module {
     single {
         XmlMapper().apply {
+            findAndRegisterModules()
+            disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        }
+    }
+    single {
+        ObjectMapper().apply {
             findAndRegisterModules()
             disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         }
@@ -88,8 +95,9 @@ val appModule = module {
         val freshControllers = mapOf(
             controllerCreator {
                 ProjectInitController(
-                    get(), get(), get(), get(),
-                    workerScope = get(App), viewScope = get(View))
+                    get(), get(), get(), get(), get(),
+                    workerScope = get(App), viewScope = get(View)
+                )
             }
         )
         return@single Callback {

@@ -1,17 +1,8 @@
 package me.kenzierocks.mcpide
 
 import javafx.application.Application
-import javafx.fxml.FXMLLoader
 import javafx.scene.Scene
 import javafx.stage.Stage
-import javafx.util.Callback
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import me.kenzierocks.mcpide.controller.MainController
-import me.kenzierocks.mcpide.controller.ProjectInitController
 import me.kenzierocks.mcpide.util.KLogLogger
 import me.kenzierocks.mcpide.util.LineConsumer
 import me.kenzierocks.mcpide.util.LineOutputStream
@@ -20,10 +11,8 @@ import mu.KotlinLogging
 import org.koin.core.KoinComponent
 import org.koin.core.context.startKoin
 import org.koin.core.inject
-import org.koin.core.scope.Scope
 import org.koin.dsl.module
 import java.io.PrintStream
-import java.net.URL
 import java.nio.charset.StandardCharsets
 
 private lateinit var APP_INSTANCE: MCPIDE
@@ -67,7 +56,7 @@ fun main(args: Array<String>) {
         logger(KLogLogger(KotlinLogging.logger("Koin")))
 
         modules(listOf(
-            appModule, viewModule, modelModule, httpModule, xmlModule, appInstanceModule
+            appModule, viewModule, modelModule, httpModule, jacksonModule, appInstanceModule
         ))
     }
 

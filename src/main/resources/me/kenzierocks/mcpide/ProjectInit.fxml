@@ -51,7 +51,7 @@
       </TextField>
       <MenuButton mnemonicParsing="false" text="Select From..." GridPane.columnIndex="2" GridPane.rowIndex="1">
          <items>
-            <MenuItem mnemonicParsing="false" onAction="#selectMinecraftForgeMaven" text="Forge's Maven" />
+            <MenuItem mnemonicParsing="false" onAction="#selectMinecraftForgeMaven" text="Mojang's Launcher Data" />
             <MenuItem mnemonicParsing="false" onAction="#selectMinecraftLocalFiles" text="Local Files" />
          </items>
          <GridPane.margin>

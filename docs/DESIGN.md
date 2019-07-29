@@ -4,7 +4,7 @@ MCPIDE works as follows:
 1. Pick an MCP CSV release. Recent versions will be fetched from Forge's Maven 
 server and offered for use, or a local zip can be selected.
 2. Pick a corresponding Minecraft JAR. Recent versions will be fetched from
-Forge's Maven server and offered for use, or a local jar can be selected.
+Mojang's launcher metadata JSON and offered for use, or a local jar can be selected.
 3. Unpack and rewrite the MCP CSVs into SRG format, store those in the project
 metadata.
 
