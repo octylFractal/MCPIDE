@@ -28,12 +28,14 @@ import me.kenzierocks.mcpide.util.checkStatusCode
 import me.kenzierocks.mcpide.util.enqueueSuspend
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
+import me.kenzierocks.mcpide.util.sortedByVersion
 import me.kenzierocks.mcpide.util.withChildContext
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 private const val FORGE_MAVEN = "https://files.minecraftforge.net/maven"
@@ -57,6 +59,12 @@ class ProjectInitController(
     private lateinit var mcpZipText: TextField
     @FXML
     private lateinit var minecraftJarText: TextField
+    @FXML
+    private lateinit var mcpConfigText: TextField
+
+    val mcpZipPath get() = Paths.get(mcpZipText.text)
+    val mcpConfigPath get() = Paths.get(mcpConfigText.text)
+    val minecraftJarPath get() = Paths.get(minecraftJarText.text)
 
     private fun TextField.selectLocalFiles(title: String, extensions: List<FileChooser.ExtensionFilter>) {
         val fileChooser = FileChooser()
@@ -73,9 +81,11 @@ class ProjectInitController(
         workerScope.launch {
             val versionList = ListView(FXCollections.observableList(
                 loadMavenVersions("/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml")
+                    .sortedByVersion().asReversed()
             ))
             val ver = withChildContext(viewScope) {
                 val dialog = Alert(Alert.AlertType.CONFIRMATION)
+                dialog.isResizable = true
                 dialog.title = "MCP Release Selection"
                 dialog.headerText = "Choose an MCP release"
                 dialog.dialogPane.content = versionList
@@ -133,6 +143,42 @@ class ProjectInitController(
         )
     }
 
+    fun selectMcpConfigForgeMaven() {
+        workerScope.launch {
+            val versionList = ListView(FXCollections.observableList(
+                loadMavenVersions("/de/oceanlabs/mcp/mcp_config/maven-metadata.xml")
+                    .sortedByVersion().asReversed()
+            ))
+            val ver = withChildContext(viewScope) {
+                val dialog = Alert(Alert.AlertType.CONFIRMATION)
+                dialog.isResizable = true
+                dialog.title = "MCP Config Release Selection"
+                dialog.headerText = "Choose an MCP Config release"
+                dialog.dialogPane.content = versionList
+                dialog.dialogPane.setPrefSizeFromContent()
+
+                when (dialog.showAndSuspend()) {
+                    null, ButtonType.CANCEL -> null
+                    else -> versionList.selectionModel.selectedItem
+                }
+            } ?: return@launch // no version selected
+            val path = downloadFile(
+                "$FORGE_MAVEN/de/oceanlabs/mcp/mcp_config/$ver/mcp_config-$ver.zip",
+                "mcp_config-$ver.zip"
+            )
+            withChildContext(viewScope) {
+                mcpConfigText.text = path.toAbsolutePath().toString()
+            }
+        }
+    }
+
+    fun selectMcpConfigLocalFiles() {
+        mcpConfigText.selectLocalFiles(
+            title = "Select an MCP Config ZIP",
+            extensions = listOf(FileChooser.ExtensionFilter("ZIP Files", "*.zip"))
+        )
+    }
+
     fun selectMinecraftForgeMaven() {
         workerScope.launch {
             val minecraftVersions = loadMinecraftVersions()
@@ -141,6 +187,7 @@ class ProjectInitController(
             ))
             withChildContext(viewScope) {
                 val dialog = Alert(Alert.AlertType.CONFIRMATION)
+                dialog.isResizable = true
                 dialog.title = "Minecraft Release Selection"
                 dialog.headerText = "Choose a Minecraft release"
                 dialog.dialogPane.content = versionList

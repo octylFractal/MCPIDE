@@ -73,6 +73,7 @@ import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
+import me.kenzierocks.mcpide.util.withChildContext
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
 import java.io.File
@@ -258,6 +259,7 @@ class MainController(
     private suspend fun initializeProject(path: Path) {
         val ipDialog = Alert(Alert.AlertType.NONE)
         ipDialog.initModality(Modality.APPLICATION_MODAL)
+        ipDialog.isResizable = true
         ipDialog.title = "Initialize Project"
         ipDialog.buttonTypes.addAll(ButtonType.CANCEL, ButtonType.FINISH)
         val (parent, controller) = fxmlFiles.projectInit()
@@ -266,7 +268,10 @@ class MainController(
         when (ipDialog.showAndSuspend()) {
             null, ButtonType.CANCEL -> return
         }
+        withChildContext(workerScope) {
 
+        }
+        controller.mcpZipPath
     }
 
     @FXML
