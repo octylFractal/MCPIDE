@@ -24,7 +24,6 @@
  */
 package me.kenzierocks.mcpide.util
 
-import me.kenzierocks.mcpide.ORIGINAL_OUT
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream

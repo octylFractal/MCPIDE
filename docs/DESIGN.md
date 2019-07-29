@@ -1,8 +1,8 @@
 MCPIDE works as follows:
 
 ### Project Creation
-1. Pick an MCP CSV release. Recent versions will be fetched from Maven Central and
-offered for use, or a local zip can be selected.
+1. Pick an MCP CSV release. Recent versions will be fetched from Forge's Maven 
+server and offered for use, or a local zip can be selected.
 2. Pick a corresponding Minecraft JAR. Recent versions will be fetched from
 Forge's Maven server and offered for use, or a local jar can be selected.
 3. Unpack and rewrite the MCP CSVs into SRG format, store those in the project

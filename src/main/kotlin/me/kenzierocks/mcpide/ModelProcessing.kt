@@ -2,12 +2,16 @@ package me.kenzierocks.mcpide
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.comms.BeginProjectInitialize
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelComms
 import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.ViewMessage
+import java.nio.file.Files
 import java.nio.file.Path
+
+private const val PROJECT_META = ".mcpide"
 
 class ModelProcessing(
     private val workerScope: CoroutineScope,
@@ -29,7 +33,10 @@ class ModelProcessing(
     }
 
     private suspend fun loadProject(path: Path) {
-        sendMessage(OpenInFileTree(path))
+        if (Files.exists(path.resolve(PROJECT_META))) {
+            sendMessage(OpenInFileTree(path))
+        }
+        sendMessage(BeginProjectInitialize(path))
     }
 
     private fun exportMappings() {

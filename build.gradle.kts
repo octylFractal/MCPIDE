@@ -72,7 +72,11 @@ dependencies {
     }
     commonLib("com.fasterxml.jackson.dataformat", "jackson-dataformat", jacksonVersion) {
         "implementation"(lib("csv"))
+        "implementation"(lib("xml"))
     }
+    "implementation"("com.fasterxml.woodstox:woodstox-core:5.3.0")
+    "implementation"("javax.xml.bind:jaxb-api:2.3.1")
+    "implementation"("com.squareup.okhttp3:okhttp:4.0.1")
 
     commonLib("org.junit.jupiter", "junit-jupiter", "5.5.1") {
         "testImplementation"(lib("api"))

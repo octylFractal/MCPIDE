@@ -5,7 +5,6 @@ import com.github.javaparser.TokenRange
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.LineNumberFactory
 import java.nio.file.Path
-import java.util.Scanner
 
 class JavaEditorArea(var path: Path) : CodeArea() {
     private var lineOffsets: IntArray? = null
@@ -17,15 +16,11 @@ class JavaEditorArea(var path: Path) : CodeArea() {
 
     fun setText(text: String) {
         replaceText(text)
-        lineOffsets = sequence {
-            val s = Scanner(text)
-            var offset = 0
-            while (s.hasNextLine()) {
-                yield(offset)
-                val line = s.nextLine()
-                offset += line.length + 1
-            }
-        }.toList().toIntArray()
+        val offsets = IntArray(paragraphs.size)
+        paragraphs.forEachIndexed { i, p ->
+            offsets[i] = offsets.getOrElse(i) { 0 } + p.length()
+        }
+        lineOffsets = offsets
     }
 
     fun styleTokenRange(style: String, tokenRange: TokenRange) {

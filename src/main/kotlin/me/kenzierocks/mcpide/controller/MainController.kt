@@ -23,11 +23,12 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.controller
 
 import com.github.javaparser.TokenRange
 import javafx.application.Platform
 import javafx.fxml.FXML
+import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.MenuBar
@@ -40,6 +41,7 @@ import javafx.scene.control.TreeView
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.stage.DirectoryChooser
+import javafx.stage.Modality
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +56,11 @@ import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.kenzierocks.mcpide.FxmlFiles
+import me.kenzierocks.mcpide.MCPIDE
+import me.kenzierocks.mcpide.ManifestVersion
+import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.comms.BeginProjectInitialize
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
@@ -62,7 +69,10 @@ import me.kenzierocks.mcpide.comms.UpdateMappings
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.apply
+import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
+import me.kenzierocks.mcpide.util.setPrefSizeFromContent
+import me.kenzierocks.mcpide.util.showAndSuspend
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
 import java.io.File
@@ -78,11 +88,12 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.Scanner
 import java.util.stream.Collectors.joining
 
-class Controller(
+class MainController(
     private val app: MCPIDE,
     private val viewComms: ViewComms,
     private val workerScope: CoroutineScope,
-    private val viewScope: CoroutineScope
+    private val viewScope: CoroutineScope,
+    private val fxmlFiles: FxmlFiles
 ) {
 
     companion object {
@@ -137,6 +148,7 @@ class Controller(
                 fileTree.root = dirTree.await()
             }
             is UpdateMappings -> mappings.apply(viewMessage)
+            is BeginProjectInitialize -> initializeProject(viewMessage.directory)
         })
     }
 
@@ -243,6 +255,20 @@ class Controller(
         viewComms.modelChannel.sendBlocking(modelMessage)
     }
 
+    private suspend fun initializeProject(path: Path) {
+        val ipDialog = Alert(Alert.AlertType.NONE)
+        ipDialog.initModality(Modality.APPLICATION_MODAL)
+        ipDialog.title = "Initialize Project"
+        ipDialog.buttonTypes.addAll(ButtonType.CANCEL, ButtonType.FINISH)
+        val (parent, controller) = fxmlFiles.projectInit()
+        ipDialog.dialogPane.content = parent
+        ipDialog.dialogPane.setPrefSizeFromContent()
+        when (ipDialog.showAndSuspend()) {
+            null, ButtonType.CANCEL -> return
+        }
+
+    }
+
     @FXML
     fun loadDirectory() {
         val fileSelect = DirectoryChooser()
@@ -284,12 +310,10 @@ class Controller(
 class PathCell : TreeCell<Path>() {
     companion object {
         private fun image(path: String): Image {
-            return Image(PathCell::class.java.getResource(path).toString(), 16.0, 16.0, true, true)
+            return Image(MCPIDE::class.java.getResource(path).toString(), 16.0, 16.0, true, true)
         }
 
-        //language=file-reference
         private val IMAGE_FILE = image("glyphicons/png/glyphicons-37-file.png")
-        //language=file-reference
         private val IMAGE_FOLDER = image("glyphicons/png/glyphicons-145-folder-open.png")
     }
 
