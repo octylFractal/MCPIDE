@@ -56,6 +56,18 @@ dependencies {
         "implementation"(lib("symbol-solver-core"))
     }
 
+    commonLib("org.apache.maven.resolver", "maven-resolver", "1.4.0") {
+        "implementation"(lib("api"))
+        "implementation"(lib("spi"))
+        "implementation"(lib("impl"))
+        "implementation"(lib("connector-basic"))
+        "implementation"(lib("transport-wagon"))
+    }
+    commonLib("org.apache.maven.wagon", "wagon", "3.3.3") {
+        "implementation"(lib("provider-api"))
+    }
+    "implementation"("org.apache.maven", "maven-resolver-provider", "3.6.1")
+
     val jacksonVersion = "2.9.9"
     "implementation"("com.fasterxml.jackson.core", "jackson-databind", "$jacksonVersion.1")
     commonLib("com.fasterxml.jackson.core", "jackson", jacksonVersion) {

@@ -18,7 +18,6 @@
    <rowConstraints>
       <RowConstraints minHeight="10.0" valignment="CENTER" vgrow="SOMETIMES" />
       <RowConstraints minHeight="10.0" valignment="CENTER" vgrow="SOMETIMES" />
-      <RowConstraints minHeight="10.0" valignment="CENTER" vgrow="SOMETIMES" />
    </rowConstraints>
    <children>
       <Label alignment="CENTER" text="MCP ZIP:" textAlignment="CENTER" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER">
@@ -54,25 +53,6 @@
          <items>
             <MenuItem mnemonicParsing="false" onAction="#selectMcpConfigForgeMaven" text="Forge's Maven" />
             <MenuItem mnemonicParsing="false" onAction="#selectMcpConfigLocalFiles" text="Local Files" />
-         </items>
-         <GridPane.margin>
-            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
-         </GridPane.margin>
-      </MenuButton>
-      <Label text="Minecraft JAR:" textAlignment="CENTER" GridPane.rowIndex="2">
-         <GridPane.margin>
-            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
-         </GridPane.margin>
-      </Label>
-      <TextField fx:id="minecraftJarText" GridPane.columnIndex="1" GridPane.rowIndex="2">
-         <GridPane.margin>
-            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
-         </GridPane.margin>
-      </TextField>
-      <MenuButton mnemonicParsing="false" text="Select From..." GridPane.columnIndex="2" GridPane.rowIndex="2">
-         <items>
-            <MenuItem mnemonicParsing="false" onAction="#selectMinecraftForgeMaven" text="Mojang's Launcher Data" />
-            <MenuItem mnemonicParsing="false" onAction="#selectMinecraftLocalFiles" text="Local Files" />
          </items>
          <GridPane.margin>
             <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />

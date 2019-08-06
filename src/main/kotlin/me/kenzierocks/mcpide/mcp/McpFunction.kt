@@ -23,34 +23,20 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.mcp
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import java.nio.file.Path
+import java.util.zip.ZipFile
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
-) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
-}
+/**
+ * Interface for functions used by MCPConfig's config.json.
+ */
+interface McpFunction {
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
+    suspend operator fun invoke(context: McpContext): Path
 
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
+    suspend fun initialize(context: McpContext, zip: ZipFile) {}
 
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
+    suspend fun cleanup(context: McpContext) {}
+
 }

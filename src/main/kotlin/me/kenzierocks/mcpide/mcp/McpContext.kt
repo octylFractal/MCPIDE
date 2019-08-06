@@ -23,34 +23,40 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.mcp
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import mu.KLogger
+import java.nio.file.Path
+import java.nio.file.Paths
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
+class McpContext(
+    private val runner: McpRunner,
+    val minecraftVersion: String,
+    val side: String,
+    val logger: KLogger
 ) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
+
+    val arguments get() = runner.currentStep!!.arguments
+
+    val workingDirectory get() = runner.currentStep!!.workingDir
+
+    fun file(name: String): Path {
+        val file = Paths.get(name)
+        return workingDirectory.resolve(file)
+    }
+
+    fun getStepOutput(name: String): Path {
+        val step = runner.steps[name] ?: throw IllegalArgumentException("No step with name $name")
+        return step.safeOutput
+    }
+
+    fun getStepOutput(type: Class<out McpFunction>): Path {
+        val step = runner.steps.values
+            .firstOrNull { it.isOfType(type) }
+            ?: throw IllegalArgumentException("No step of type ${type.name}")
+        return step.safeOutput
+    }
+
 }
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
-
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
-
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
-}
+inline fun <reified T : McpFunction> McpContext.getStepOutput() = getStepOutput(T::class.java)

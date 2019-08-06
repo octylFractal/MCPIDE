@@ -1,7 +1,7 @@
 /*
- * This file is part of incoherent-turbulence-level-1, licensed under the MIT License (MIT).
+ * This file is part of MCPIDE, licensed under the MIT License (MIT).
  *
- * Copyright (c) TechShroom Studios <https://techshroom.com>
+ * Copyright (c) kenzierocks <https://kenzierocks.me>
  * Copyright (c) contributors
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,6 +22,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package me.kenzierocks.mcpide.util
 
 import java.io.ByteArrayOutputStream

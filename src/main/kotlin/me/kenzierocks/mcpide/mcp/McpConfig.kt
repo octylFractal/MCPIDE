@@ -23,34 +23,38 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.mcp
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import com.fasterxml.jackson.annotation.JsonAnyGetter
+import com.fasterxml.jackson.annotation.JsonAnySetter
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.google.common.collect.ImmutableListMultimap
+import com.google.common.collect.ListMultimap
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
+data class McpConfig(
+    val spec: Int,
+    val version: String,
+    val data: Map<String, Any> = mapOf(),
+    val steps: ListMultimap<String, Step> = ImmutableListMultimap.of(),
+    val functions: Map<String, Function> = mapOf(),
+    val libraries: ListMultimap<String, String> = ImmutableListMultimap.of()
 ) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
+
+    data class Step(
+        val type: String,
+        val name: String,
+        @get:JsonAnyGetter
+        @field:JsonAnySetter
+        val values: Map<String, String>
+    )
+
+    data class Function(
+        val version: String,
+        val repo: String,
+        val args: List<String> = listOf(),
+        @JsonProperty("jvmargs")
+        val jvmArgs: List<String> = listOf()
+    )
+
 }
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
-
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
-
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
-}

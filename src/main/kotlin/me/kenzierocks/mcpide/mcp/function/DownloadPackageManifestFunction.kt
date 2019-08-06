@@ -23,34 +23,31 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.mcp.function
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import me.kenzierocks.mcpide.data.MojangVersionManifest
+import me.kenzierocks.mcpide.mcp.McpContext
+import me.kenzierocks.mcpide.mcp.getStepOutput
+import me.kenzierocks.mcpide.util.toHttpUrl
+import org.koin.core.KoinComponent
+import org.koin.core.inject
+import java.nio.file.Files
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
-) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
-}
+object DownloadPackageManifestFunction : AbstractFileDownloadFunction(), KoinComponent {
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
+    private val mapper by inject<ObjectMapper>()
 
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
+    override fun resolveOutput(context: McpContext) = "package_manifest.json"
 
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
+    override fun resolveDlInfo(context: McpContext): DownloadInfo {
+        val result = Files.newBufferedReader(context.getStepOutput<DownloadVersionManifestFunction>()).use { reader ->
+            mapper.readValue<MojangVersionManifest>(reader)
+        }
+
+        return result.versions.find { it.id == context.minecraftVersion }?.let {
+            DownloadInfo(it.url.toHttpUrl())
+        } ?: throw IllegalStateException("Version not found: ${context.minecraftVersion}")
+    }
 }

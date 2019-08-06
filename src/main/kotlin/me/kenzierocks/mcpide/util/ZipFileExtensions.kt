@@ -23,34 +23,30 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.util
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
-) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
+operator fun ZipFile.get(name: String): ZipEntry? = getEntry(name)
+
+fun ZipFile.requireEntry(name: String) = this[name] ?: throw IllegalStateException("No entry '$name'")
+
+fun ZipFile.extractEntryTo(name: String, file: Path) {
+    val ze = requireEntry(name)
+    Files.createDirectories(file.parent)
+    getInputStream(ze).use { input ->
+        Files.newOutputStream(file).use { output ->
+            input.copyTo(output)
+        }
+    }
 }
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
-
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
-
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
+fun ZipFile.extractTo(dir: Path, names: List<String>) = extractTo(dir, names.associateBy { it })
+fun ZipFile.extractTo(dir: Path, nameMap: Map<String, String>) {
+    nameMap.forEach { (entName, outName) ->
+        extractEntryTo(entName, dir.resolve(outName))
+    }
 }

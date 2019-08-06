@@ -23,34 +23,35 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.mcp
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import java.nio.file.Path
+import java.util.zip.ZipFile
 
-@JsonPropertyOrder("srgName", "newName")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String
+class McpStep(
+    private val context: McpContext,
+    val name: String,
+    private val function: McpFunction,
+    var arguments: Map<String, Any>,
+    val workingDir: Path
 ) {
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
+
+    var output: Path? = null
+        private set
+
+    val safeOutput
+        get() = output ?: throw IllegalStateException("Step $name has not been executed yet")
+
+    fun isOfType(type: Class<out McpFunction>) = type.isInstance(function)
+
+    suspend fun initialize(zip: ZipFile) = function.initialize(context, zip)
+
+    private suspend fun execute(): Path = try {
+        function(context).also { output = it }
+    } finally {
+        function.cleanup(context)
+    }
+
 }
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
-
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
-
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
-}
+inline fun <reified T : McpFunction> McpStep.isOfType() = isOfType(T::class.java)

@@ -1,6 +1,30 @@
+/*
+ * This file is part of MCPIDE, licensed under the MIT License (MIT).
+ *
+ * Copyright (c) kenzierocks <https://kenzierocks.me>
+ * Copyright (c) contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package me.kenzierocks.mcpide.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import javafx.collections.FXCollections
@@ -11,46 +35,36 @@ import javafx.scene.control.ListView
 import javafx.scene.control.TextField
 import javafx.stage.FileChooser
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.MCPIDE
-import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.data.MavenMetadata
-import me.kenzierocks.mcpide.data.MojangPackageManifest
-import me.kenzierocks.mcpide.data.MojangVersion
-import me.kenzierocks.mcpide.data.MojangVersionManifest
-import me.kenzierocks.mcpide.data.sortedByTime
-import me.kenzierocks.mcpide.util.checkStatusCode
-import me.kenzierocks.mcpide.util.enqueueSuspend
+import me.kenzierocks.mcpide.resolver.RemoteRepositories
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import me.kenzierocks.mcpide.util.sortedByVersion
 import me.kenzierocks.mcpide.util.withChildContext
-import okhttp3.CacheControl
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.nio.file.Files
+import org.apache.maven.repository.internal.MavenRepositorySystemUtils
+import org.eclipse.aether.DefaultRepositorySystemSession
+import org.eclipse.aether.RepositorySystem
+import org.eclipse.aether.RepositorySystemSession
+import org.eclipse.aether.artifact.Artifact
+import org.eclipse.aether.artifact.DefaultArtifact
+import org.eclipse.aether.metadata.DefaultMetadata
+import org.eclipse.aether.metadata.Metadata
+import org.eclipse.aether.resolution.ArtifactRequest
+import org.eclipse.aether.resolution.MetadataRequest
+import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.concurrent.TimeUnit
 
 private const val FORGE_MAVEN = "https://files.minecraftforge.net/maven"
 
-// Allow very old cached responses. No reason to avoid it with Maven.
-private val STALE_ALLOWED_CC = CacheControl.Builder()
-    .maxStale(365, TimeUnit.DAYS)
-    .build()
-
 class ProjectInitController(
     private val app: MCPIDE,
-    private val okHttp: OkHttpClient,
+    private val repositorySystem: RepositorySystem,
+    private val repositorySystemSession: RepositorySystemSession,
+    private val remoteRepositories: RemoteRepositories,
     private val xmlMapper: XmlMapper,
-    private val jsonMapper: ObjectMapper,
-    private val fileCache: FileCache,
     private val workerScope: CoroutineScope,
     private val viewScope: CoroutineScope
 ) {
@@ -58,13 +72,10 @@ class ProjectInitController(
     @FXML
     private lateinit var mcpZipText: TextField
     @FXML
-    private lateinit var minecraftJarText: TextField
-    @FXML
     private lateinit var mcpConfigText: TextField
 
     val mcpZipPath get() = Paths.get(mcpZipText.text)
     val mcpConfigPath get() = Paths.get(mcpConfigText.text)
-    val minecraftJarPath get() = Paths.get(minecraftJarText.text)
 
     private fun TextField.selectLocalFiles(title: String, extensions: List<FileChooser.ExtensionFilter>) {
         val fileChooser = FileChooser()
@@ -76,18 +87,19 @@ class ProjectInitController(
         text = selected.absolutePath
     }
 
-    fun selectMcpForgeMaven() {
-        // TODO: add a download progress indicator?
+    private fun TextField.selectMavenFile(group: String,
+                                          name: String,
+                                          title: String,
+                                          header: String) {
         workerScope.launch {
             val versionList = ListView(FXCollections.observableList(
-                loadMavenVersions("/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml")
-                    .sortedByVersion().asReversed()
+                loadMavenVersions(group, name)
             ))
             val ver = withChildContext(viewScope) {
                 val dialog = Alert(Alert.AlertType.CONFIRMATION)
                 dialog.isResizable = true
-                dialog.title = "MCP Release Selection"
-                dialog.headerText = "Choose an MCP release"
+                dialog.title = title
+                dialog.headerText = header
                 dialog.dialogPane.content = versionList
                 dialog.dialogPane.setPrefSizeFromContent()
 
@@ -96,45 +108,53 @@ class ProjectInitController(
                     else -> versionList.selectionModel.selectedItem
                 }
             } ?: return@launch // no version selected
-            val path = downloadFile(
-                "$FORGE_MAVEN/de/oceanlabs/mcp/mcp_snapshot/$ver/mcp_snapshot-$ver.zip",
-                "mcp_snapshot-$ver.zip"
-            )
+            val path = downloadArtifact(DefaultArtifact(
+                group, name, "zip", ver
+            ))
             withChildContext(viewScope) {
-                mcpZipText.text = path.toAbsolutePath().toString()
+                text = path.toAbsolutePath().toString()
             }
         }
     }
 
-    private suspend fun downloadFile(url: String, fileName: String): Path {
-        val response = standardCall(Request.Builder()
-            .cacheControl(STALE_ALLOWED_CC)
-            .url(url)
-            .build())
-        val target = fileCache.cacheEntry(fileName)
-        withContext(Dispatchers.IO) {
-            Files.newOutputStream(target).use { out ->
-                response.body!!.byteStream().copyTo(out)
-            }
-        }
-        return target
+    private fun loadMavenVersions(group: String, name: String): List<String> {
+        return repositorySystem.resolveMetadata(repositorySystemSession,
+            remoteRepositories.map {
+                MetadataRequest(
+                    DefaultMetadata(group, name, "maven-metadata.xml", Metadata.Nature.RELEASE),
+                    it,
+                    null
+                )
+            })
+            .filter { it.isResolved }
+            .flatMap { readMetadataVersions(it.metadata.file) }
+            .sortedByVersion()
+            .asReversed()
     }
 
-    private suspend fun loadMavenVersions(path: String): List<String> {
-        val mavenMetadata = "$FORGE_MAVEN$path"
-
-        val response = standardCall(Request.Builder()
-            .cacheControl(STALE_ALLOWED_CC)
-            .url(mavenMetadata)
-            .build())
-        val body = response.body ?: return listOf()
-        val metadata = xmlMapper.readValue<MavenMetadata>(body.charStream())
+    private fun readMetadataVersions(file: File): List<String> {
+        val metadata = xmlMapper.readValue<MavenMetadata>(file)
         return metadata.versioning.version
     }
 
-    private suspend fun standardCall(request: Request) =
-        okHttp.newCall(request)
-            .enqueueSuspend().throwIfFailed().checkStatusCode()
+    private fun downloadArtifact(artifact: Artifact): Path {
+        val result = repositorySystem.resolveArtifact(repositorySystemSession,
+            ArtifactRequest(artifact, remoteRepositories, null))
+        if (!result.isResolved) {
+            val ex = RuntimeException("Failed to resolve $artifact")
+            result.exceptions.forEach(ex::addSuppressed)
+            throw ex
+        }
+        return result.artifact.file.toPath()
+    }
+
+    fun selectMcpForgeMaven() {
+        mcpZipText.selectMavenFile(
+            "de.oceanlabs.mcp", "mcp_snapshot",
+            title = "MCP Release Selection",
+            header = "Choose an MCP release"
+        )
+    }
 
     fun selectMcpLocalFiles() {
         mcpZipText.selectLocalFiles(
@@ -144,32 +164,11 @@ class ProjectInitController(
     }
 
     fun selectMcpConfigForgeMaven() {
-        workerScope.launch {
-            val versionList = ListView(FXCollections.observableList(
-                loadMavenVersions("/de/oceanlabs/mcp/mcp_config/maven-metadata.xml")
-                    .sortedByVersion().asReversed()
-            ))
-            val ver = withChildContext(viewScope) {
-                val dialog = Alert(Alert.AlertType.CONFIRMATION)
-                dialog.isResizable = true
-                dialog.title = "MCP Config Release Selection"
-                dialog.headerText = "Choose an MCP Config release"
-                dialog.dialogPane.content = versionList
-                dialog.dialogPane.setPrefSizeFromContent()
-
-                when (dialog.showAndSuspend()) {
-                    null, ButtonType.CANCEL -> null
-                    else -> versionList.selectionModel.selectedItem
-                }
-            } ?: return@launch // no version selected
-            val path = downloadFile(
-                "$FORGE_MAVEN/de/oceanlabs/mcp/mcp_config/$ver/mcp_config-$ver.zip",
-                "mcp_config-$ver.zip"
-            )
-            withChildContext(viewScope) {
-                mcpConfigText.text = path.toAbsolutePath().toString()
-            }
-        }
+        mcpZipText.selectMavenFile(
+            "de.oceanlabs.mcp", "mcp_config",
+            title = "MCP Config Release Selection",
+            header = "Choose an MCP Config release"
+        )
     }
 
     fun selectMcpConfigLocalFiles() {
@@ -179,67 +178,4 @@ class ProjectInitController(
         )
     }
 
-    fun selectMinecraftForgeMaven() {
-        workerScope.launch {
-            val minecraftVersions = loadMinecraftVersions()
-            val versionList = ListView(FXCollections.observableList(
-                minecraftVersions.map { it.versionId }
-            ))
-            withChildContext(viewScope) {
-                val dialog = Alert(Alert.AlertType.CONFIRMATION)
-                dialog.isResizable = true
-                dialog.title = "Minecraft Release Selection"
-                dialog.headerText = "Choose a Minecraft release"
-                dialog.dialogPane.content = versionList
-                dialog.dialogPane.setPrefSizeFromContent()
-
-                when (dialog.showAndSuspend()) {
-                    null, ButtonType.CANCEL -> null
-                    else -> versionList.selectionModel.selectedItem
-                }
-            } ?: return@launch // no version selected
-            val ver = minecraftVersions[versionList.selectionModel.selectedIndex]
-            val path = downloadFile(ver.downloadLink.await(), "minecraft-${ver.versionId}.jar")
-            withChildContext(viewScope) {
-                minecraftJarText.text = path.toAbsolutePath().toString()
-            }
-        }
-    }
-
-    private class MinecraftVersion(
-        val versionId: String,
-        val downloadLink: Deferred<String>
-    )
-
-    private suspend fun loadMinecraftVersions(): List<MinecraftVersion> {
-        val response = standardCall(Request.Builder()
-            .cacheControl(STALE_ALLOWED_CC)
-            .url("https://launchermeta.mojang.com/mc/game/version_manifest.json")
-            .build())
-        val manifest = jsonMapper.readValue<MojangVersionManifest>(response.body!!.charStream())
-        val sortedVariants = manifest.versions.sortedByTime()
-        return sortedVariants.map { mv ->
-            // Don't try downloading until requested.
-            val dlDeferred = workerScope.async(start = CoroutineStart.LAZY) {
-                getPackageClientDownload(mv)
-            }
-            MinecraftVersion(mv.id, dlDeferred)
-        }
-    }
-
-    private suspend fun getPackageClientDownload(mv: MojangVersion): String {
-        val rsp = standardCall(Request.Builder()
-            .cacheControl(STALE_ALLOWED_CC)
-            .url(mv.url)
-            .build())
-        val pkg = jsonMapper.readValue<MojangPackageManifest>(rsp.body!!.charStream())
-        return pkg.downloads.client.url
-    }
-
-    fun selectMinecraftLocalFiles() {
-        minecraftJarText.selectLocalFiles(
-            title = "Select a Minecraft JAR",
-            extensions = listOf(FileChooser.ExtensionFilter("JAR Files", "*.jar"))
-        )
-    }
 }
