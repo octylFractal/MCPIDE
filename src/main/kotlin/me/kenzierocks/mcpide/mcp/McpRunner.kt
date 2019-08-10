@@ -25,13 +25,21 @@
 
 package me.kenzierocks.mcpide.mcp
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.channels.SendChannel
 import me.kenzierocks.mcpide.mcp.function.DownloadClientFunction
-import me.kenzierocks.mcpide.mcp.function.DownloadVersionManifestFunction
 import me.kenzierocks.mcpide.mcp.function.DownloadPackageManifestFunction
 import me.kenzierocks.mcpide.mcp.function.DownloadServerFunction
+import me.kenzierocks.mcpide.mcp.function.DownloadVersionManifestFunction
+import me.kenzierocks.mcpide.mcp.function.ExecuteFunction
+import me.kenzierocks.mcpide.mcp.function.InjectFunction
+import me.kenzierocks.mcpide.mcp.function.ListLibrariesFunction
+import me.kenzierocks.mcpide.mcp.function.PatchFunction
 import me.kenzierocks.mcpide.mcp.function.StripJarFunction
+import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import mu.KotlinLogging
+import org.eclipse.aether.artifact.DefaultArtifact
+import org.eclipse.aether.repository.RemoteRepository
 import java.nio.file.Path
 import java.util.zip.ZipFile
 
@@ -42,31 +50,21 @@ private fun createBuiltInFunction(type: String, data: Map<String, String>): McpF
         "downloadClient" -> DownloadClientFunction
         "downloadServer" -> DownloadServerFunction
         "strip" -> StripJarFunction(data.getValue("mappings"))
-//        "listLibraries" -> ListLibrariesFunction()
-//        "inject" -> InjectFunction()
-//        "patch" -> PatchFunction()
+        "listLibraries" -> ListLibrariesFunction
+        "inject" -> InjectFunction(data.getValue("inject"))
+        "patch" -> PatchFunction(data.getValue("patches"))
         else -> null
     }
-}
-
-private fun createExecuteFunction(step: McpConfig.Step,
-                                  functions: Map<String, McpConfig.Function>,
-                                  data: Map<String, String>): McpFunction {
-    val jsonFunc = functions[step.type]
-        ?: throw IllegalArgumentException("Invalid MCP config, unknown function type: ${step.type}")
-//    val jar = runBlocking { fetchFunction(jsonFunc) }
-//        ?: throw IllegalStateException("Could not download MCP function JAR for ${step.type}")
-//    return ExecuteFunction(jar, jsonFunc.args, jsonFunc.jvmArgs)
-    TODO()
 }
 
 class McpRunner(
     private val mcpConfigZip: Path,
     private val config: McpConfig,
     side: String,
-    private val mcpDirectory: Path
+    private val mcpDirectory: Path,
+    private val mavenAccess: MavenAccess
 ) {
-    private val logger = KotlinLogging.logger { }
+    private val logger = KotlinLogging.logger("MCPOutput")
 
     private val context = McpContext(this, config.version, side, logger)
 
@@ -95,12 +93,30 @@ class McpRunner(
         }
     }
 
+    private fun createExecuteFunction(step: McpConfig.Step,
+                                      functions: Map<String, McpConfig.Function>,
+                                      data: Map<String, String>): McpFunction {
+        val jsonFunc = functions[step.type]
+            ?: throw IllegalArgumentException("Invalid MCP config, unknown function type: ${step.type}")
+        val jar = fetchFunction(step.type, jsonFunc)
+        return ExecuteFunction(jar, jsonFunc.jvmArgs, jsonFunc.args, data)
+    }
+
+    private fun fetchFunction(type: String, func: McpConfig.Function): Path {
+        val artifact = mavenAccess.resolveArtifact(DefaultArtifact(gradleCoordsToMaven(func.version)),
+            listOf(func.repo).map { RemoteRepository.Builder(type, "default", func.repo).build() })
+        if (artifact.isResolved) {
+            return artifact.artifact.file.toPath()
+        }
+        throw IllegalArgumentException("No such function JAR: ${func.version} (resolving '$type')")
+    }
+
     /**
      * Run steps, stopping at [stop] if specified.
      *
      * @return the final step's output
      */
-    suspend fun run(stop: String? = null): Path {
+    suspend fun run(stop: String? = null, currentStepChannel: SendChannel<String>): Path {
         val untilMsg = when (stop) {
             null -> ""
             else -> " (until '$stop')"
@@ -122,6 +138,7 @@ class McpRunner(
             steps.forEach { step ->
                 logger.info { "> Initializing '${step.name}'" }
                 currentStep = step
+                currentStepChannel.send("Initializing '${step.name}'")
                 step.initialize(zip)
                 logger.info { "> Initialized '${step.name}'" }
             }
@@ -131,12 +148,14 @@ class McpRunner(
         steps.forEach { step ->
             logger.info { "> Running '${step.name}'" }
             currentStep = step
+            currentStepChannel.send("Running '${step.name}'")
             step.arguments = step.arguments.mapValues { (_, v) ->
                 when (v) {
                     is String -> replaceOutputTemplate(v)
                     else -> v
                 }
             }
+            step.execute()
         }
 
         if (stop != null) {

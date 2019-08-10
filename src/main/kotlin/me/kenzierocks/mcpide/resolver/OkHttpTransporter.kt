@@ -45,6 +45,7 @@ import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.Response
 import okhttp3.internal.closeQuietly
 import okio.BufferedSink
 import org.apache.maven.wagon.InputData
@@ -85,6 +86,7 @@ class OkHttpWagon(
                 .build()
         }
     private lateinit var request: Request.Builder
+    private lateinit var getResponse: Response
     private lateinit var putResponse: Deferred<CallResult>
 
     override fun openConnectionInternal() {
@@ -107,15 +109,29 @@ class OkHttpWagon(
         val response = httpClient.newCall(req).execute()
         when (response.code) {
             HTTP_FORBIDDEN, HTTP_UNAUTHORIZED ->
-                throw AuthorizationException("Access denied to ${req.url}")
+                AuthorizationException("Access denied to ${req.url}")
             HTTP_NOT_FOUND ->
-                throw ResourceDoesNotExistException("Resource ${req.url} not found")
+                ResourceDoesNotExistException("Resource ${req.url} not found")
             !in 200..299 ->
-                throw TransferFailedException("Failed to transfer ${response.request.url}: HTTP Error ${response.code}")
+                TransferFailedException("Failed to transfer ${response.request.url}: HTTP Error ${response.code}")
+            else -> null
+        }?.let { error ->
+            try {
+                response.close()
+            } catch (e: Throwable) {
+                error.addSuppressed(e)
+            }
+            throw error
         }
         inputData.inputStream = response.body?.byteStream()
         inputData.resource.lastModified = response.headers.getInstant(HttpHeaders.LAST_MODIFIED)?.toEpochMilli() ?: -1
         inputData.resource.contentLength = response.body?.contentLength() ?: -1
+    }
+
+    override fun cleanupGetTransfer(resource: Resource?) {
+        if (this::getResponse.isInitialized) {
+            getResponse.closeQuietly()
+        }
     }
 
     // Run a "PUT" request
@@ -166,7 +182,7 @@ class OkHttpWagon(
         }
     }
 
-    override fun closeConnection() {
+    override fun cleanupPutTransfer(resource: Resource) {
         if (this::putResponse.isInitialized) {
             runBlocking {
                 when (val result = putResponse.await()) {
@@ -174,6 +190,9 @@ class OkHttpWagon(
                 }
             }
         }
+    }
+
+    override fun closeConnection() {
     }
 
 }

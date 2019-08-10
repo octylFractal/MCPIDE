@@ -51,6 +51,7 @@ class FileCache(
     }
 
     val mcpideCacheDirectory = directory.resolveAndCreate("files-1")
+    val mcpWorkDirectory = directory.resolveAndCreate("mcp-1")
     val mavenCacheDirectory = directory.resolveAndCreate("maven-2")
     val okHttpCacheDirectory = directory.resolveAndCreate("okhttp-4")
 

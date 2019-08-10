@@ -40,12 +40,16 @@ data class McpConfig(
     val libraries: ListMultimap<String, String> = ImmutableListMultimap.of()
 ) {
 
+    init {
+        require(spec == 1) { "Unknown spec version: $spec" }
+    }
+
     data class Step(
         val type: String,
-        val name: String,
+        val name: String = type,
         @get:JsonAnyGetter
         @field:JsonAnySetter
-        val values: Map<String, String>
+        val values: Map<String, String> = mutableMapOf()
     )
 
     data class Function(

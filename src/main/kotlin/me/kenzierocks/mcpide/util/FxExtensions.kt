@@ -25,9 +25,13 @@
 
 package me.kenzierocks.mcpide.util
 
+import com.google.common.base.Throwables
 import javafx.beans.value.ChangeListener
 import javafx.beans.value.ObservableValue
 import javafx.event.EventHandler
+import javafx.scene.Node
+import javafx.scene.Parent
+import javafx.scene.control.Alert
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
 import kotlinx.coroutines.CoroutineName
@@ -35,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.exhaustive
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -63,6 +68,31 @@ suspend fun <R> Dialog<R>.showAndSuspend(): R? {
                 cont.resume(newValue)
                 resultProperty().removeListener(this)
             }
+        })
+    }
+}
+
+/**
+ * Open a dialog showing the error to the user, and suspend until it is closed.
+ */
+suspend fun Throwable.openErrorDialog(title: String = "Error",
+                                      header: String = "An error occurred in MCPIDE") {
+    val dialog = Alert(Alert.AlertType.ERROR)
+    dialog.title = title
+    dialog.contentText = Throwables.getStackTraceAsString(this)
+    dialog.headerText = header
+    dialog.isResizable = true
+    dialog.dialogPane.setPrefSizeFromContent()
+    dialog.showAndSuspend()
+}
+
+inline fun <reified P : Parent> Node.findParent(): P? {
+    var n: Node = this
+    while (true) {
+        exhaustive(when(val p = n.parent) {
+            null -> return null
+            is P -> return p
+            else -> n = p
         })
     }
 }

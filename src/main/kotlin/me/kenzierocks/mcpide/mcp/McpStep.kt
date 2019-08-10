@@ -46,7 +46,7 @@ class McpStep(
 
     suspend fun initialize(zip: ZipFile) = function.initialize(context, zip)
 
-    private suspend fun execute(): Path = try {
+    suspend fun execute(): Path = try {
         function(context).also { output = it }
     } finally {
         function.cleanup(context)

@@ -1,9 +1,32 @@
-<configuration>
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration
+        xmlns="http://ch.qos.logback/xml/ns/logback"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://ch.qos.logback/xml/ns/logback https://raw.githubusercontent.com/enricopulatzo/logback-XSD/master/src/main/xsd/logback.xsd">
+  <property name="pattern"
+            value="[%d{yyyy-MM-dd'T'HH:mm:ss.SSS,Universal}] [%thread:%logger{10}:%-5.5level]: %msg%n%rEx"/>
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>[%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}] [%thread:%logger:%-5.5level]: %msg%n%rEx</pattern>
+      <pattern>${pattern}</pattern>
     </encoder>
   </appender>
+  <appender name="MCP" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/mcp.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>logs/mcp-%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+      <maxHistory>10</maxHistory>
+    </rollingPolicy>
+    <encoder>
+      <pattern>${pattern}</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="Koin" level="INFO"/>
+  <logger name="org.eclipse.aether" level="INFO"/>
+
+  <logger name="MCPOutput" additivity="false">
+    <appender-ref ref="MCP"/>
+  </logger>
 
   <root level="DEBUG">
     <appender-ref ref="STDOUT" />

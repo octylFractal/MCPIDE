@@ -77,6 +77,7 @@ class StripJarFunction(
     }
 
     private suspend fun strip(input: Path, output: Path, whitelist: Boolean) {
+        Files.createDirectories(output.parent)
         withContext(Dispatchers.IO) {
             JarInputStream(Files.newInputStream(input)).use { jarIn ->
                 JarOutputStream(Files.newOutputStream(output)).use { jarOut ->

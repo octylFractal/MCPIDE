@@ -74,3 +74,24 @@ fun canReuseOutput(input: Path, output: Path): Boolean {
 private fun hashFile(input: Path): HashCode = GOOD_HASH.newHasher().putFile(input).hash()
 
 private fun hashFileFor(input: Path): Path = input.resolveSibling("${input.fileName}.sha256")
+
+object HashBuilding {
+    fun StringBuilder.addEntry(key: String, value: Any): StringBuilder {
+        return addEntry(key) {
+            append(when {
+                value is Path && Files.isRegularFile(value) -> hashFile(value)
+                else -> value
+            })
+        }
+    }
+
+    inline fun StringBuilder.addEntry(key: String, value: StringBuilder.() -> Unit): StringBuilder {
+        return append(key).append('=').also(value).append('\n')
+    }
+
+    fun StringBuilder.addArgs(key: String, args: List<String>): StringBuilder {
+        return addEntry(key) {
+            args.joinTo(this, separator = " ")
+        }
+    }
+}

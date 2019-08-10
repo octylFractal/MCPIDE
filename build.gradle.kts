@@ -7,7 +7,7 @@ plugins {
     id("com.techshroom.incise-blue") version "0.3.14"
     id("com.github.johnrengelman.shadow") version "5.1.0"
     id("net.researchgate.release") version "2.8.1"
-    id("org.openjfx.javafxplugin") version "0.0.7"
+    id("org.openjfx.javafxplugin") version "0.0.8"
     application
     id("edu.sc.seis.launch4j")
     id("com.techshroom.release-files")
@@ -37,13 +37,13 @@ tasks.withType<KotlinCompile> {
 
 dependencies {
     "implementation"(kotlin("stdlib-jdk8"))
-    commonLib("org.jetbrains.kotlinx", "kotlinx-coroutines", "1.3.0-RC") {
+    commonLib("org.jetbrains.kotlinx", "kotlinx-coroutines", "1.3.0-RC2") {
         "implementation"(lib("core"))
         "implementation"(lib("jdk8"))
         "implementation"(lib("javafx"))
     }
-    "implementation"("org.jetbrains.kotlinx", "kotlinx-coroutines-io-jvm", "0.1.12")
-    "implementation"("io.github.microutils:kotlin-logging:1.6.26")
+    "implementation"("org.jetbrains.kotlinx", "kotlinx-coroutines-io-jvm", "0.1.13")
+    "implementation"("io.github.microutils:kotlin-logging:1.7.4")
     commonLib("ch.qos.logback", "logback", "1.2.3") {
         "implementation"(lib("core"))
         "implementation"(lib("classic"))
@@ -51,7 +51,7 @@ dependencies {
     "implementation"("com.google.guava:guava:28.0-jre")
     "implementation"("org.koin:koin-core:2.0.1")
     "implementation"("org.fxmisc.richtext:richtextfx:0.10.1")
-    commonLib("com.github.javaparser", "javaparser", "3.14.8") {
+    commonLib("com.github.javaparser", "javaparser", "3.14.9") {
         "implementation"(lib("core"))
         "implementation"(lib("symbol-solver-core"))
     }

@@ -6,3 +6,4 @@
 build/
 !/gradle/wrapper/gradle-wrapper.jar
 /.apt_generated/
+/logs

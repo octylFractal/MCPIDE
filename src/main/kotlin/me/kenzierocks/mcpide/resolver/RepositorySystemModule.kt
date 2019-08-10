@@ -34,6 +34,7 @@ import org.apache.maven.repository.internal.SnapshotMetadataGeneratorFactory
 import org.apache.maven.repository.internal.VersionsMetadataGeneratorFactory
 import org.eclipse.aether.RepositorySystem
 import org.eclipse.aether.RepositorySystemSession
+import org.eclipse.aether.artifact.Artifact
 import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory
 import org.eclipse.aether.impl.ArtifactDescriptorReader
 import org.eclipse.aether.impl.DefaultServiceLocator
@@ -42,6 +43,8 @@ import org.eclipse.aether.impl.VersionRangeResolver
 import org.eclipse.aether.impl.VersionResolver
 import org.eclipse.aether.repository.LocalRepository
 import org.eclipse.aether.repository.RemoteRepository
+import org.eclipse.aether.resolution.ArtifactRequest
+import org.eclipse.aether.resolution.ArtifactResult
 import org.eclipse.aether.spi.connector.RepositoryConnectorFactory
 import org.eclipse.aether.spi.connector.transport.TransporterFactory
 import org.eclipse.aether.transport.wagon.WagonProvider
@@ -50,6 +53,16 @@ import org.koin.dsl.module
 
 private inline fun <reified R, reified T : R> DefaultServiceLocator.addService() {
     addService(R::class.java, T::class.java)
+}
+
+class MavenAccess(
+    val system: RepositorySystem,
+    val session: RepositorySystemSession,
+    val repositories: List<RemoteRepository>
+) {
+    fun resolveArtifact(artifact: Artifact,
+                        repositories: List<RemoteRepository> = this.repositories): ArtifactResult =
+        system.resolveArtifact(session, ArtifactRequest(artifact, repositories, ""))
 }
 
 /**
@@ -80,11 +93,12 @@ val resolverModule = module {
         }
     }
     single {
-        RemoteRepositories(listOf(
-            RemoteRepository.Builder("forge-maven", "default", "https://files.minecraftforge.net/maven")
-        ).map { it.build() })
+        RemoteRepositories(mapOf(
+            "forge-maven" to "https://files.minecraftforge.net/maven",
+            "mojang-maven" to "https://libraries.minecraft.net"
+        ).map { (id, url) -> RemoteRepository.Builder(id, "default", url).build() })
     }
-    factory<RepositorySystemSession> {
+    single<RepositorySystemSession> {
         val fc = get<FileCache>()
         val rs = get<RepositorySystem>()
         MavenRepositorySystemUtils.newSession().also { sess ->
@@ -92,6 +106,9 @@ val resolverModule = module {
                 LocalRepository(fc.mavenCacheDirectory.toFile())
             )
         }
+    }
+    single {
+        MavenAccess(system = get(), session = get(), repositories = get<RemoteRepositories>())
     }
 }
 

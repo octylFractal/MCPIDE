@@ -19,15 +19,18 @@
             <items>
                   <MenuItem mnemonicParsing="false" onAction="#loadDirectory" text="Open Project...">
                      <accelerator>
-                        <KeyCodeCombination alt="UP" code="O" control="UP" meta="DOWN" shift="UP" shortcut="UP" />
+                        <KeyCodeCombination alt="UP" code="O" control="UP" meta="UP" shift="UP" shortcut="DOWN" />
                      </accelerator></MenuItem>
                 <MenuItem id="menu-item-to" mnemonicParsing="false" onAction="#export" text="Export">
                      <accelerator>
-                        <KeyCodeCombination alt="UP" code="E" control="UP" meta="DOWN" shift="UP" shortcut="UP" />
+                        <KeyCodeCombination alt="UP" code="E" control="UP" meta="UP" shift="UP" shortcut="DOWN" />
                      </accelerator>
                   </MenuItem>
                   <SeparatorMenuItem mnemonicParsing="false" />
-              <MenuItem fx:id="quitMenuItem" mnemonicParsing="false" onAction="#quit" text="Quit" />
+              <MenuItem fx:id="quitMenuItem" mnemonicParsing="false" onAction="#quit" text="Quit">
+                     <accelerator>
+                        <KeyCodeCombination alt="UP" code="Q" control="UP" meta="UP" shift="UP" shortcut="DOWN" />
+                     </accelerator></MenuItem>
             </items>
           </Menu>
           <Menu mnemonicParsing="false" text="Help">

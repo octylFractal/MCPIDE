@@ -25,12 +25,18 @@
 
 package me.kenzierocks.mcpide.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.javaparser.TokenRange
 import javafx.application.Platform
 import javafx.fxml.FXML
+import javafx.geometry.Insets
+import javafx.geometry.Pos
+import javafx.scene.Scene
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
+import javafx.scene.control.Label
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
 import javafx.scene.control.Tab
@@ -40,14 +46,18 @@ import javafx.scene.control.TreeItem
 import javafx.scene.control.TreeView
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
+import javafx.scene.layout.VBox
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
+import javafx.stage.Stage
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.channels.onReceiveOrNull
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.sendBlocking
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +65,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
@@ -69,11 +80,16 @@ import me.kenzierocks.mcpide.comms.UpdateMappings
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.apply
+import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
+import me.kenzierocks.mcpide.mcp.McpConfig
+import me.kenzierocks.mcpide.mcp.McpRunner
+import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.requireEntry
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
-import me.kenzierocks.mcpide.util.withChildContext
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
 import java.io.File
@@ -88,9 +104,13 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.Scanner
 import java.util.stream.Collectors.joining
+import java.util.zip.ZipFile
 
 class MainController(
     private val app: MCPIDE,
+    private val fileCache: FileCache,
+    private val jsonMapper: ObjectMapper,
+    private val mavenAccess: MavenAccess,
     private val viewComms: ViewComms,
     private val workerScope: CoroutineScope,
     private val viewScope: CoroutineScope,
@@ -116,7 +136,7 @@ class MainController(
 
     private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
                                   |Copyright © 2019 Kenzie Togami""".trimMargin()
-    private var defaultDirectory: String = System.getProperty("user.home")
+    private var defaultDirectory: Path = Path.of(System.getProperty("user.home"))
     private val mappings = mutableMapOf<String, SrgMapping>()
 
     @FXML
@@ -137,7 +157,7 @@ class MainController(
         }
     }
 
-    private fun isValidPath(path: Path?) : Boolean {
+    private fun isValidPath(path: Path?): Boolean {
         return path != null && Files.exists(path) && !Files.isDirectory(path)
     }
 
@@ -153,7 +173,7 @@ class MainController(
         })
     }
 
-    private fun expandDirectory(directory: Path) : TreeItem<Path> {
+    private fun expandDirectory(directory: Path): TreeItem<Path> {
         var currentParentNode = TreeItem(directory)
 
         Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
@@ -265,23 +285,77 @@ class MainController(
         val (parent, controller) = fxmlFiles.projectInit()
         ipDialog.dialogPane.content = parent
         ipDialog.dialogPane.setPrefSizeFromContent()
-        when (ipDialog.showAndSuspend()) {
-            null, ButtonType.CANCEL -> return
+        while (controller.mcpConfigPath == null ||
+            controller.mcpZipPath == null) {
+            when (ipDialog.showAndSuspend()) {
+                null, ButtonType.CANCEL -> return
+            }
         }
-        withChildContext(workerScope) {
+        // spin this off before huge UI blocks
+        val steps = Channel<String>(Channel.CONFLATED)
+        val result = workerScope.async {
+            val configZip = controller.mcpConfigPath!!
+            val configJson = ZipFile(configZip.toFile()).use { zip ->
+                zip.getInputStream(zip.requireEntry("config.json")).use { eis ->
+                    jsonMapper.readValue<McpConfig>(eis)
+                }
+            }
+            val runner = McpRunner(
+                configZip,
+                configJson,
+                "joined",
+                fileCache.mcpWorkDirectory.resolve(configZip.fileName.toString().substringBefore(".zip")),
+                mavenAccess
+            )
+            runner.run(currentStepChannel = steps)
+        }
+        workerScope.launch {
+            try {
+                result.await()
+            } finally {
+                steps.close()
+            }
+        }
+        val importingStage = Stage()
+        val mainLabel = Label("Importing, please wait.")
+        val currentStep = Label("")
+        VBox.setMargin(mainLabel, Insets(10.0))
+        VBox.setMargin(currentStep, Insets(10.0))
+        val vBox = VBox(
+            mainLabel, currentStep
+        )
+        vBox.alignment = Pos.CENTER
+        importingStage.scene = Scene(vBox, 320.0, 180.0)
+        importingStage.title = "Importing"
+        importingStage.initModality(Modality.APPLICATION_MODAL)
+        importingStage.show()
 
+        val r = result.runCatching {
+            while (true) {
+                select<Path?> {
+                    onAwait { it }
+                    steps.onReceiveOrNull()() { step ->
+                        step?.let { currentStep.text = "> $step" }
+                        null
+                    }
+                }?.let { return@runCatching it }
+            }
         }
-        controller.mcpZipPath
+        importingStage.hide()
+        r.exceptionOrNull()?.let { e ->
+            logger.warn(e) { "Error while importing MCP config." }
+            e.openErrorDialog()
+        }
     }
 
     @FXML
     fun loadDirectory() {
         val fileSelect = DirectoryChooser()
         fileSelect.title = "Select a Project"
-        fileSelect.initialDirectory = File(defaultDirectory)
+        fileSelect.initialDirectory = defaultDirectory.toFile()
         val selected: File = fileSelect.showDialog(app.stage) ?: return
-        if (selected.parentFile != fileSelect.initialDirectory) {
-            defaultDirectory = selected.parent
+        if (selected != fileSelect.initialDirectory) {
+            defaultDirectory = selected.toPath()
         }
         sendMessage(LoadProject(selected.toPath()))
     }

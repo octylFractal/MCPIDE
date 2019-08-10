@@ -68,6 +68,7 @@ abstract class AbstractFileDownloadFunction : McpFunction, KoinComponent {
         }
 
         Files.deleteIfExists(download)
+        Files.createDirectories(download.parent)
 
         try {
             val response = httpClient.newCall(Request.Builder()

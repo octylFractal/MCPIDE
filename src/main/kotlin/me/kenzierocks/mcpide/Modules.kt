@@ -64,7 +64,7 @@ val viewModule = module {
             + SupervisorJob())
     }
     single { COMMS.first }
-    single { MainController(get(), get(), workerScope = get(App), viewScope = get(View), fxmlFiles = get()) }
+    single { MainController(get(), get(), get(), get(), get(), workerScope = get(App), viewScope = get(View), fxmlFiles = get()) }
     single { ViewEventLoop(get(View), get(), get()) }
 }
 

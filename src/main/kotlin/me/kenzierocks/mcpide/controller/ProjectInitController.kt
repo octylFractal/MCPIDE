@@ -29,22 +29,26 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import javafx.collections.FXCollections
 import javafx.fxml.FXML
+import javafx.scene.Node
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
+import javafx.scene.control.ListCell
 import javafx.scene.control.ListView
 import javafx.scene.control.TextField
 import javafx.stage.FileChooser
+import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.data.MavenMetadata
 import me.kenzierocks.mcpide.resolver.RemoteRepositories
+import me.kenzierocks.mcpide.util.findParent
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import me.kenzierocks.mcpide.util.sortedByVersion
 import me.kenzierocks.mcpide.util.withChildContext
-import org.apache.maven.repository.internal.MavenRepositorySystemUtils
-import org.eclipse.aether.DefaultRepositorySystemSession
 import org.eclipse.aether.RepositorySystem
 import org.eclipse.aether.RepositorySystemSession
 import org.eclipse.aether.artifact.Artifact
@@ -55,9 +59,6 @@ import org.eclipse.aether.resolution.ArtifactRequest
 import org.eclipse.aether.resolution.MetadataRequest
 import java.io.File
 import java.nio.file.Path
-import java.nio.file.Paths
-
-private const val FORGE_MAVEN = "https://files.minecraftforge.net/maven"
 
 class ProjectInitController(
     private val app: MCPIDE,
@@ -74,8 +75,8 @@ class ProjectInitController(
     @FXML
     private lateinit var mcpConfigText: TextField
 
-    val mcpZipPath get() = Paths.get(mcpZipText.text)
-    val mcpConfigPath get() = Paths.get(mcpConfigText.text)
+    val mcpZipPath: Path? get() = mcpZipText.text.takeUnless { it.isEmpty() }?.let { Path.of(it) }
+    val mcpConfigPath: Path? get() = mcpConfigText.text.takeUnless { it.isEmpty() }?.let { Path.of(it) }
 
     private fun TextField.selectLocalFiles(title: String, extensions: List<FileChooser.ExtensionFilter>) {
         val fileChooser = FileChooser()
@@ -103,6 +104,28 @@ class ProjectInitController(
                 dialog.dialogPane.content = versionList
                 dialog.dialogPane.setPrefSizeFromContent()
 
+                // Handle double-click as "open this one"
+                versionList.cellFactory = Callback {
+                    object : ListCell<String>() {
+                        override fun updateItem(item: String?, empty: Boolean) {
+                            super.updateItem(item, empty)
+
+                            if (empty) {
+                                text = null
+                                onMouseClicked = null
+                            } else {
+                                text = item
+                                setOnMouseClicked { e ->
+                                    if (e.clickCount == 2 && isSelected) {
+                                        dialog.result = ButtonType.OK
+                                        dialog.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 when (dialog.showAndSuspend()) {
                     null, ButtonType.CANCEL -> null
                     else -> versionList.selectionModel.selectedItem
@@ -111,7 +134,7 @@ class ProjectInitController(
             val path = downloadArtifact(DefaultArtifact(
                 group, name, "zip", ver
             ))
-            withChildContext(viewScope) {
+            Dispatchers.Main {
                 text = path.toAbsolutePath().toString()
             }
         }
@@ -164,7 +187,7 @@ class ProjectInitController(
     }
 
     fun selectMcpConfigForgeMaven() {
-        mcpZipText.selectMavenFile(
+        mcpConfigText.selectMavenFile(
             "de.oceanlabs.mcp", "mcp_config",
             title = "MCP Config Release Selection",
             header = "Choose an MCP Config release"
