@@ -81,7 +81,7 @@ private val appInstanceModule = module {
 fun main(args: Array<String>) {
     val logger = KotlinLogging.logger { }
     try {
-        val koin = startKoin {
+        startKoin {
             logger(KLogLogger(KotlinLogging.logger("Koin")))
 
             modules(listOf(

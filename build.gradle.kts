@@ -30,6 +30,7 @@ tasks.withType<KotlinCompile> {
         freeCompilerArgs = listOf(
             "-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi",
             "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi",
+            "-Xuse-experimental=kotlinx.coroutines.FlowPreview",
             "-Xuse-experimental=kotlinx.io.core.ExperimentalIoApi"
         )
     }

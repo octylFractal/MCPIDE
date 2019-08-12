@@ -28,7 +28,7 @@ package me.kenzierocks.mcpide
 import javafx.fxml.FXMLLoader
 import javafx.scene.Parent
 import me.kenzierocks.mcpide.controller.MainController
-import me.kenzierocks.mcpide.controller.ProjectInitController
+import me.kenzierocks.mcpide.controller.FileAskDialogController
 import java.net.URL
 
 data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
@@ -45,7 +45,7 @@ class FxmlFiles(
     }
 
     fun main() = load<Parent, MainController>("Main.fxml")
-    fun projectInit() = load<Parent, ProjectInitController>("ProjectInit.fxml")
+    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
 }
 
 private object FxmlRefClass {

@@ -25,23 +25,55 @@
 
 package me.kenzierocks.mcpide
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapMerge
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.comms.BeginProjectInitialize
+import me.kenzierocks.mcpide.comms.AskDecompileSetup
+import me.kenzierocks.mcpide.comms.AskInitialMappings
+import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelComms
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.SetInitialMappings
+import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
+import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.mcp.McpConfig
+import me.kenzierocks.mcpide.mcp.McpRunner
+import me.kenzierocks.mcpide.project.Project
+import me.kenzierocks.mcpide.project.ProjectWorker
+import me.kenzierocks.mcpide.project.projectWorker
+import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.requireEntry
+import mu.KotlinLogging
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
-
-private const val PROJECT_META = ".mcpide"
+import java.util.zip.ZipFile
 
 class ModelProcessing(
+    private val jsonMapper: ObjectMapper,
+    private val srgCsv: SrgCsv,
+    private val mavenAccess: MavenAccess,
+    private val fileCache: FileCache,
     private val workerScope: CoroutineScope,
     private val modelComms: ModelComms
 ) {
+    private val logger = KotlinLogging.logger { }
+    private var projectWorker: ProjectWorker? = null
+
+    private fun requireProjectWorker() = projectWorker ?: throw IllegalStateException("No project set.")
+
     private suspend fun sendMessage(viewMessage: ViewMessage) {
         modelComms.viewChannel.send(viewMessage)
     }
@@ -52,16 +84,87 @@ class ModelProcessing(
                 exhaustive(when (val msg = modelComms.modelChannel.receive()) {
                     is LoadProject -> loadProject(msg.projectDirectory)
                     is ExportMappings -> exportMappings()
+                    is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)
+                    is SetInitialMappings -> initMappings(msg.srgMappingsZip)
                 })
             }
         }
     }
 
-    private suspend fun loadProject(path: Path) {
-        if (Files.exists(path.resolve(PROJECT_META))) {
-            sendMessage(OpenInFileTree(path))
+    private suspend fun decompileMinecraft(mcpConfigZip: Path) {
+        val configJson = ZipFile(mcpConfigZip.toFile()).use { zip ->
+            zip.getInputStream(zip.requireEntry("config.json")).use { eis ->
+                jsonMapper.readValue<McpConfig>(eis)
+            }
         }
-        sendMessage(BeginProjectInitialize(path))
+        val runner = McpRunner(
+            mcpConfigZip,
+            configJson,
+            "joined",
+            fileCache.mcpWorkDirectory.resolve(mcpConfigZip.fileName.toString().substringBefore(".zip")),
+            mavenAccess
+        )
+        val decompiledJar = decompileJar(runner) ?: return
+        requireProjectWorker().write(suspendFor = true) {
+            copyMinecraftJar(decompiledJar)
+        }
+    }
+
+    private suspend fun decompileJar(runner: McpRunner): Path? {
+        return try {
+            runner.run { step -> sendMessage(StatusUpdate("MC Decompile", step)) }
+        } catch (e: Exception) {
+            logger.warn(e) { "Error while importing MCP config." }
+            e.openErrorDialog()
+            null
+        } finally {
+            sendMessage(StatusUpdate("MC Decompile", ""))
+        }
+    }
+
+    private suspend fun initMappings(srgMappingsZip: Path) {
+        val result = flowOf("fields.csv", "methods.csv", "params.csv")
+            .flatMapMerge { readSrgZipEntry(srgMappingsZip, it) }
+            .toList()
+
+        val p = requireProjectWorker()
+        p.write {
+            addMappings(result)
+        }
+        p.write { save() }
+    }
+
+    private fun readSrgZipEntry(srgMappingsZip: Path, entry: String): Flow<SrgMapping> {
+        val zipFs = FileSystems.newFileSystem(srgMappingsZip, null)
+        val entryPath = zipFs.getPath(entry)
+        require(Files.exists(entryPath)) { "No $entry in $srgMappingsZip" }
+        return flow {
+            Files.newBufferedReader(entryPath).use { reader ->
+                srgCsv.reader.readValues<SrgMapping>(reader).forEach {
+                    emit(it)
+                }
+            }
+        }.flowOn(Dispatchers.IO)
+    }
+
+    private suspend fun loadProject(path: Path) {
+        projectWorker?.run { channel.close() }
+        val p = Project(path, srgCsv).let { proj ->
+            workerScope.projectWorker(proj).also { projectWorker = it }
+        }
+        p.write {
+            load()
+            if (isInitializedOnDisk()) {
+                sendMessage(OpenInFileTree(p.read { directory }))
+            } else {
+                if (!hasInitialMappingsFile()) {
+                    sendMessage(AskInitialMappings)
+                }
+                if (!hasMinecraftJar()) {
+                    sendMessage(AskDecompileSetup)
+                }
+            }
+        }
     }
 
     private fun exportMappings() {

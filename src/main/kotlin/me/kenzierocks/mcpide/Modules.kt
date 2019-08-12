@@ -27,7 +27,9 @@ package me.kenzierocks.mcpide
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
+import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
 import javafx.fxml.FXMLLoader
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -35,10 +37,13 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.runBlocking
 import me.kenzierocks.mcpide.comms.comms
+import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.MainController
-import me.kenzierocks.mcpide.controller.ProjectInitController
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.util.openErrorDialog
 import mu.KotlinLogging
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -54,23 +59,24 @@ private val COMMS = comms()
 val LOGGER = KotlinLogging.logger("unhandled-exceptions")
 val CO_EXCEPTION_HANDLER: (CoroutineContext, Throwable) -> Unit = { ctx, e ->
     LOGGER.warn(e) { "Unhandled exception in ${ctx[CoroutineName]}" }
+    runBlocking { e.openErrorDialog() }
 }
 
 val viewModule = module {
     single(View) {
-        CoroutineScope(Dispatchers.Main
+        CoroutineScope(Dispatchers.JavaFx
             + CoroutineName("View")
             + CoroutineExceptionHandler(CO_EXCEPTION_HANDLER)
             + SupervisorJob())
     }
     single { COMMS.first }
-    single { MainController(get(), get(), get(), get(), get(), workerScope = get(App), viewScope = get(View), fxmlFiles = get()) }
+    single { MainController(get(), get(), get(), get(), workerScope = get(App), viewScope = get(View), fxmlFiles = get()) }
     single { ViewEventLoop(get(View), get(), get()) }
 }
 
 val modelModule = module {
     single { COMMS.second }
-    single { ModelProcessing(get(App), get()) }
+    single { ModelProcessing(get(), get(), get(), get(), get(App), get()) }
 }
 
 val httpModule = module {
@@ -79,6 +85,16 @@ val httpModule = module {
             .cache(Cache(get<FileCache>().okHttpCacheDirectory.toFile(), 10_000_000))
             .build()
     }
+}
+
+class SrgCsv {
+    val mapper = CsvMapper().apply {
+        findAndRegisterModules()
+    }
+    val schema = mapper.schemaFor(jacksonTypeRef<SrgMapping>())
+        .withSkipFirstDataRow(true)!!
+    val writer = mapper.writer(schema)!!
+    val reader = mapper.readerFor(jacksonTypeRef<SrgMapping>()).with(schema)!!
 }
 
 val jacksonModule = module {
@@ -94,6 +110,7 @@ val jacksonModule = module {
             disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         }
     }
+    single { SrgCsv() }
 }
 
 private inline fun <reified T> Scope.controllerEntry(): Pair<Class<*>, T> {
@@ -119,9 +136,8 @@ val appModule = module {
         )
         val freshControllers = mapOf(
             controllerCreator {
-                ProjectInitController(
-                    get(), get(), get(), get(), get(),
-                    workerScope = get(App), viewScope = get(View)
+                FileAskDialogController(
+                    viewScope = get(View)
                 )
             }
         )

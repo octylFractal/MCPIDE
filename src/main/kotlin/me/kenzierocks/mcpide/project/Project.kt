@@ -27,14 +27,8 @@ package me.kenzierocks.mcpide.project
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.produce
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.yield
+import me.kenzierocks.mcpide.SrgCsv
 import me.kenzierocks.mcpide.SrgMapping
-import me.kenzierocks.mcpide.util.extractTo
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.Reader
@@ -42,27 +36,73 @@ import java.io.Writer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
-import java.util.zip.ZipFile
-
-
-private val CSV_MAPPER = CsvMapper().also { it.findAndRegisterModules() }
-private val MAPPING_SCHEMA = CSV_MAPPER.schemaFor(jacksonTypeRef<SrgMapping>())
-    .withHeader().withStrictHeaders(true)
-private val CSV_WRITER = CSV_MAPPER.writer(MAPPING_SCHEMA)
-private val CSV_READER = CSV_MAPPER.readerFor(jacksonTypeRef<SrgMapping>())
-    .with(MAPPING_SCHEMA)
 
 /**
- * Class for manipulating a Project.
+ * Class for manipulating a project. Uses no internal locking, and should either
+ * have external synchronization applied or be used with [ProjectWorker].
  */
-class Project(val directory: Path) {
+class Project(
+    val directory: Path,
+    private val srgCsv: SrgCsv
+) : AutoCloseable {
+    // Acquire project lock first.
+    private val projectLock = projectLock(directory).also { it.acquire() }
+
+    override fun close() {
+        projectLock.close()
+    }
+
     private val srgMappingsFile: Path = directory.resolve("srg-mappings.csv.gz")
     private val exportsFile: Path = directory.resolve("srg-exports.csv.gz")
-    private val mcpConfigDir: Path = directory.resolve("mcp_config")
-    private val mutex = Mutex()
-    val minecraftJar: Path = directory.resolve("minecraft.jar")
+    private val minecraftJar: Path = directory.resolve("minecraft.jar")
+    private val srgMappings = mutableMapOf<String, SrgMapping>()
+    private val exportMappings = mutableSetOf<String>()
+    var dirty = false
+
+    // Non-IO functions, work with in-memory representation
+
+    fun addMappings(mappings: Iterable<SrgMapping>, itemsForExport: Iterable<String> = setOf()) {
+        mappings.associateByTo(srgMappings) { it.srgName }
+        exportMappings.addAll(itemsForExport)
+        dirty = true
+    }
+
+    // IO, save/load functions, work with files
+
+    fun isInitializedOnDisk(): Boolean {
+        return hasInitialMappingsFile() && hasMinecraftJar()
+    }
+
+    fun hasInitialMappingsFile() = Files.exists(srgMappingsFile)
+
+    fun hasMinecraftJar() = Files.exists(minecraftJar)
+
+    fun copyMinecraftJar(from: Path) {
+        Files.copy(from, minecraftJar, StandardCopyOption.REPLACE_EXISTING)
+    }
+
+    fun load() {
+        loadMappings()
+        dirty = false
+    }
+
+    fun save(force: Boolean = false) {
+        if (!force && !dirty) {
+            return
+        }
+        saveMappings()
+        dirty = false
+    }
+
+    private fun loadMappings() {
+        readSrgMappings(srgMappingsFile).associateByTo(srgMappings) { it.srgName }
+        readSrgMappings(exportsFile)
+            .map { it.srgName }
+            .filterTo(exportMappings) { it in srgMappings }
+    }
 
     private inline fun gzReader(path: Path, block: (Reader) -> Unit) {
         InputStreamReader(
@@ -71,25 +111,26 @@ class Project(val directory: Path) {
         ).use(block)
     }
 
-    private fun CoroutineScope.readSrgMappings(path: Path): ReceiveChannel<SrgMapping> {
-        return produce<SrgMapping>(capacity = 100) {
-            mutex.withLock {
-                gzReader(path) { reader ->
-                    CSV_READER.readValues<SrgMapping>(reader).forEach {
-                        channel.send(it)
-                        yield()
-                    }
+    private fun readSrgMappings(path: Path): Sequence<SrgMapping> {
+        if (Files.notExists(path)) {
+            return emptySequence()
+        }
+        return sequence {
+            gzReader(path) { reader ->
+                srgCsv.reader.readValues<SrgMapping>(reader).forEach {
+                    yield(it)
                 }
             }
+        }.constrainOnce()
+    }
+
+    private fun saveMappings() {
+        gzWriter(srgMappingsFile) { it.writeMappings(srgMappings.values.asSequence()) }
+        gzWriter(exportsFile) {
+            it.writeMappings(exportMappings.asSequence().map { k ->
+                srgMappings.getValue(k)
+            })
         }
-    }
-
-    fun CoroutineScope.readAllSrgMappings(): ReceiveChannel<SrgMapping> {
-        return readSrgMappings(srgMappingsFile)
-    }
-
-    fun CoroutineScope.readExportSrgMappings(): ReceiveChannel<SrgMapping> {
-        return readSrgMappings(exportsFile)
     }
 
     private fun gzWriter(path: Path, block: (Writer) -> Unit) {
@@ -99,25 +140,8 @@ class Project(val directory: Path) {
         ).use(block)
     }
 
-    suspend fun storeSrgMappings(srgMapping: List<SrgMapping>, forExport: Boolean = false) {
-        mutex.withLock {
-            gzWriter(srgMappingsFile) { it.writeMappings(srgMapping) }
-            if (forExport) {
-                gzWriter(exportsFile) { it.writeMappings(srgMapping) }
-            }
-        }
-    }
-
-    private fun Writer.writeMappings(srgMapping: List<SrgMapping>) {
-        CSV_WRITER.writeValues(this).writeAll(srgMapping)
-    }
-
-    suspend fun saveMcpZip(zip: Path) {
-        mutex.withLock {
-            ZipFile(zip.toFile()).use { zf ->
-                zf.extractTo(mcpConfigDir, zf.entries().toList().map { it.name })
-            }
-        }
+    private fun Writer.writeMappings(srgMapping: Sequence<SrgMapping>) {
+        srgCsv.writer.writeValues(this).use { seqWriter -> srgMapping.forEach { seqWriter.write(it) } }
     }
 
 }

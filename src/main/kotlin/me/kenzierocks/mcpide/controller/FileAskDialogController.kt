@@ -23,46 +23,39 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.controller
 
-import com.fasterxml.jackson.annotation.JsonFormat
-import com.fasterxml.jackson.annotation.JsonIgnore
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
+import javafx.fxml.FXML
+import javafx.scene.control.MenuButton
+import javafx.scene.control.MenuItem
+import javafx.scene.control.TextField
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import java.nio.file.Path
 
-@JsonPropertyOrder("srgName", "newName", "side", "desc")
-data class SrgMapping(
-    val srgName: String,
-    val newName: String,
-    @JsonFormat(shape = JsonFormat.Shape.NUMBER_INT)
-    val side: Side,
-    val desc: String? = null
+class FileAskDialogController(
+    private val viewScope: CoroutineScope
 ) {
-    @JsonIgnore
-    val type = srgName.detectSrgType()
-        ?: throw IllegalArgumentException("SRG name did not contain type prefix")
-}
 
-enum class Side {
-    CLIENT,
-    SERVER,
-    JOINED
-}
+    @FXML
+    private lateinit var fileText: TextField
+    @FXML
+    private lateinit var selectMenu: MenuButton
+    private val stage get() = fileText.scene.window
 
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
-}
+    fun addFileSources(sources: Iterable<FileSource>) {
+        val menu = selectMenu
+        sources.forEach { source ->
+            val item = MenuItem(source.description)
+            item.setOnAction {
+                viewScope.launch {
+                    source.retrieveFile(stage)?.let { fileText.text = it.toAbsolutePath().toString() }
+                }
+            }
+            menu.items.add(item)
+        }
+    }
 
-// match TYPE_, to prevent other misc. matches
-private val SRG_TYPE_REGEX = Regex(
-    "(" +
-        SrgType.values().joinToString(separator = "|", transform = { it.prefix }) +
-        ")_"
-)
-private val SRG_TYPE_MAP = SrgType.values().associateBy { it.prefix }
+    val path: Path? get() = fileText.text.takeUnless { it.isEmpty() }?.let { Path.of(it) }
 
-fun String.detectSrgType(): SrgType? {
-    val type = SRG_TYPE_REGEX.find(this) ?: return null
-    return SRG_TYPE_MAP.getValue(type.groupValues[1])
 }

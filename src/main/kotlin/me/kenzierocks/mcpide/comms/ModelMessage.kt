@@ -32,3 +32,7 @@ sealed class ModelMessage
 data class LoadProject(val projectDirectory: Path) : ModelMessage()
 
 object ExportMappings : ModelMessage()
+
+data class DecompileMinecraft(val mcpConfigZip: Path) : ModelMessage()
+
+data class SetInitialMappings(val srgMappingsZip: Path) : ModelMessage()

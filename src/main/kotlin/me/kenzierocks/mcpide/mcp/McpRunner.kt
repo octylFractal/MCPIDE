@@ -25,7 +25,6 @@
 
 package me.kenzierocks.mcpide.mcp
 
-import kotlinx.coroutines.channels.SendChannel
 import me.kenzierocks.mcpide.mcp.function.DownloadClientFunction
 import me.kenzierocks.mcpide.mcp.function.DownloadPackageManifestFunction
 import me.kenzierocks.mcpide.mcp.function.DownloadServerFunction
@@ -116,7 +115,7 @@ class McpRunner(
      *
      * @return the final step's output
      */
-    suspend fun run(stop: String? = null, currentStepChannel: SendChannel<String>): Path {
+    suspend fun run(stop: String? = null, onStepChange: suspend (String) -> Unit): Path {
         val untilMsg = when (stop) {
             null -> ""
             else -> " (until '$stop')"
@@ -138,7 +137,7 @@ class McpRunner(
             steps.forEach { step ->
                 logger.info { "> Initializing '${step.name}'" }
                 currentStep = step
-                currentStepChannel.send("Initializing '${step.name}'")
+                onStepChange("Initializing '${step.name}'")
                 step.initialize(zip)
                 logger.info { "> Initialized '${step.name}'" }
             }
@@ -148,7 +147,7 @@ class McpRunner(
         steps.forEach { step ->
             logger.info { "> Running '${step.name}'" }
             currentStep = step
-            currentStepChannel.send("Running '${step.name}'")
+            onStepChange("Running '${step.name}'")
             step.arguments = step.arguments.mapValues { (_, v) ->
                 when (v) {
                     is String -> replaceOutputTemplate(v)

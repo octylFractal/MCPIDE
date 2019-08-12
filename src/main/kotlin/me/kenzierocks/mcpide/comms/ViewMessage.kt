@@ -30,11 +30,15 @@ import java.nio.file.Path
 
 sealed class ViewMessage
 
-data class BeginProjectInitialize(val directory: Path) : ViewMessage()
+object AskInitialMappings : ViewMessage()
+
+object AskDecompileSetup : ViewMessage()
 
 data class OpenInFileTree(val directory: Path) : ViewMessage()
 
 data class UpdateMappings(val mappings: List<SrgMapping>, val merge: Boolean = false) : ViewMessage()
+
+data class StatusUpdate(val category: String, val status: String) : ViewMessage()
 
 fun MutableMap<String, SrgMapping>.apply(update: UpdateMappings) {
     if (!update.merge) {

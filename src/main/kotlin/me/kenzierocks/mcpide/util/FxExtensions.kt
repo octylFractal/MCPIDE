@@ -34,11 +34,19 @@ import javafx.scene.Parent
 import javafx.scene.control.Alert
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
+import javafx.scene.control.Label
+import javafx.scene.control.TextArea
+import javafx.scene.layout.Border
+import javafx.scene.layout.Region
+import javafx.scene.text.Font
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.javafx.JavaFxDispatcher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.exhaustive
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -77,13 +85,22 @@ suspend fun <R> Dialog<R>.showAndSuspend(): R? {
  */
 suspend fun Throwable.openErrorDialog(title: String = "Error",
                                       header: String = "An error occurred in MCPIDE") {
-    val dialog = Alert(Alert.AlertType.ERROR)
-    dialog.title = title
-    dialog.contentText = Throwables.getStackTraceAsString(this)
-    dialog.headerText = header
-    dialog.isResizable = true
-    dialog.dialogPane.setPrefSizeFromContent()
-    dialog.showAndSuspend()
+    withContext(Dispatchers.JavaFx) {
+        val dialog = Alert(Alert.AlertType.ERROR)
+        dialog.title = title
+        val label = TextArea(Throwables.getStackTraceAsString(this@openErrorDialog))
+        label.font = Font.font("Monospaced", 16.0)
+        label.prefColumnCount = (label.paragraphs.map { it.length }.max() ?: 80) + 16
+        label.prefRowCount = label.paragraphs.size + 5
+        label.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE)
+        label.isEditable = false
+        label.border = Border.EMPTY
+        dialog.dialogPane.content = label
+        dialog.headerText = header
+        dialog.isResizable = true
+        dialog.dialogPane.setPrefSizeFromContent()
+        dialog.showAndSuspend()
+    }
 }
 
 inline fun <reified P : Parent> Node.findParent(): P? {
