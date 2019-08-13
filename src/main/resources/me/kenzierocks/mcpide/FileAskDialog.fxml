@@ -18,7 +18,7 @@
       <RowConstraints minHeight="10.0" valignment="CENTER" vgrow="SOMETIMES" />
    </rowConstraints>
    <children>
-      <Label alignment="CENTER" text="FILE_TYPE:" textAlignment="CENTER" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER">
+      <Label fx:id="fileTypeLabel" alignment="CENTER" text="FILE_TYPE:" textAlignment="CENTER" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER">
          <GridPane.margin>
             <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
          </GridPane.margin>

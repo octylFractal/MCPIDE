@@ -25,9 +25,31 @@
 
 package me.kenzierocks.mcpide
 
-import org.koin.core.qualifier.Qualifier
+import javax.inject.Qualifier
 
-object App : Qualifier
-object View : Qualifier
-object ControllerFactory : Qualifier
-object FxmlLoader : Qualifier
+@Target(AnnotationTarget.VALUE_PARAMETER,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Qualifier
+annotation class Model
+
+@Target(AnnotationTarget.VALUE_PARAMETER,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Qualifier
+annotation class View
+
+@Target(AnnotationTarget.VALUE_PARAMETER,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Qualifier
+annotation class Srg

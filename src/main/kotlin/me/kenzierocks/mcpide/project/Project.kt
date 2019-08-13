@@ -25,10 +25,12 @@
 
 package me.kenzierocks.mcpide.project
 
-import com.fasterxml.jackson.dataformat.csv.CsvMapper
-import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
-import me.kenzierocks.mcpide.SrgCsv
+import com.fasterxml.jackson.databind.ObjectReader
+import com.fasterxml.jackson.databind.ObjectWriter
+import me.kenzierocks.mcpide.Srg
 import me.kenzierocks.mcpide.SrgMapping
+import net.octyl.aptcreator.GenerateCreator
+import net.octyl.aptcreator.Provided
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.Reader
@@ -44,9 +46,13 @@ import java.util.zip.GZIPOutputStream
  * Class for manipulating a project. Uses no internal locking, and should either
  * have external synchronization applied or be used with [ProjectWorker].
  */
+@GenerateCreator
 class Project(
     val directory: Path,
-    private val srgCsv: SrgCsv
+    @[Provided Srg]
+    private val srgReader: ObjectReader,
+    @[Provided Srg]
+    private val srgWriter: ObjectWriter
 ) : AutoCloseable {
     // Acquire project lock first.
     private val projectLock = projectLock(directory).also { it.acquire() }
@@ -117,7 +123,7 @@ class Project(
         }
         return sequence {
             gzReader(path) { reader ->
-                srgCsv.reader.readValues<SrgMapping>(reader).forEach {
+                srgReader.readValues<SrgMapping>(reader).forEach {
                     yield(it)
                 }
             }
@@ -141,7 +147,7 @@ class Project(
     }
 
     private fun Writer.writeMappings(srgMapping: Sequence<SrgMapping>) {
-        srgCsv.writer.writeValues(this).use { seqWriter -> srgMapping.forEach { seqWriter.write(it) } }
+        srgWriter.writeValues(this).use { seqWriter -> srgMapping.forEach { seqWriter.write(it) } }
     }
 
 }

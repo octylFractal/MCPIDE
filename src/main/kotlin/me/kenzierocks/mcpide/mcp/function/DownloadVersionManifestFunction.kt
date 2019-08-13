@@ -27,10 +27,16 @@ package me.kenzierocks.mcpide.mcp.function
 
 import me.kenzierocks.mcpide.mcp.McpContext
 import me.kenzierocks.mcpide.util.toHttpUrl
+import okhttp3.OkHttpClient
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest.json".toHttpUrl()
 
-object DownloadVersionManifestFunction : AbstractFileDownloadFunction() {
+@Singleton
+class DownloadVersionManifestFunction @Inject constructor(
+    httpClient: OkHttpClient
+) : AbstractFileDownloadFunction(httpClient) {
     override fun resolveOutput(context: McpContext) = "version_manifest.json"
     override fun resolveDlInfo(context: McpContext) = DownloadInfo(MANIFEST_URL)
 }

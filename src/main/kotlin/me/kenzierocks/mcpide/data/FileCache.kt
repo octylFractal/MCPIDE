@@ -28,26 +28,37 @@ package me.kenzierocks.mcpide.data
 import kotlinx.io.errors.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val SPECIAL_DIRS = setOf("..", ".")
+
+private val CONFIG_DIR = Paths.get(System.getenv("XDG_CONFIG_DIRECTORY")
+    ?: "${System.getProperty("user.home", ".")}/.config")
 
 /**
  * Data cache for global MCPIDE data.
  */
-class FileCache(
-    val directory: Path
-) {
+@Singleton
+class FileCache @Inject constructor() {
 
     private fun Path.resolveAndCreate(dir: String): Path {
         val newDir = resolve(dir)
-        try {
-            Files.createDirectory(newDir)
-        } catch (ignored: IOException) {
-            require(Files.isDirectory(newDir)) {
-                "$newDir already exists but is not a directory."
+        if (Files.notExists(newDir)) {
+            try {
+                Files.createDirectory(newDir)
+            } catch (ignored: IOException) {
+                require(Files.isDirectory(newDir)) {
+                    "$newDir already exists but is not a directory."
+                }
             }
         }
         return newDir
+    }
+
+    private val directory = CONFIG_DIR.resolve("mcpide").also { mcpDir ->
+        Files.createDirectories(mcpDir)
     }
 
     val mcpideCacheDirectory = directory.resolveAndCreate("files-1")
@@ -57,7 +68,7 @@ class FileCache(
 
     fun cacheEntry(name: String): Path {
         require(!name.contains('/')) { "Name cannot contain slashes." }
-        require(name !in SPECIAL_DIRS) { "Name cannot be '..' or '.'."}
+        require(name !in SPECIAL_DIRS) { "Name cannot be '..' or '.'." }
         return mcpideCacheDirectory.resolve(name)
     }
 

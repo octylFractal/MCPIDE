@@ -25,71 +25,101 @@
 
 package me.kenzierocks.mcpide
 
+import dagger.BindsInstance
+import dagger.Component
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.stage.Stage
-import me.kenzierocks.mcpide.resolver.resolverModule
-import me.kenzierocks.mcpide.util.KLogLogger
+import me.kenzierocks.mcpide.resolver.RepositorySystemModule
 import me.kenzierocks.mcpide.util.LineConsumer
 import me.kenzierocks.mcpide.util.LineOutputStream
 import mu.KLogger
 import mu.KotlinLogging
-import org.koin.core.KoinComponent
-import org.koin.core.context.startKoin
-import org.koin.core.inject
-import org.koin.dsl.module
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
+import javax.inject.Singleton
 import kotlin.system.exitProcess
 
-private lateinit var APP_INSTANCE: MCPIDE
+class MCPIDE : Application() {
 
-class MCPIDE : Application(), KoinComponent {
+    private val logger = KotlinLogging.logger {  }
 
-    init {
-        APP_INSTANCE = this
-    }
-
-    private val viewEventLoop by inject<ViewEventLoop>()
-    private val modelProcessing by inject<ModelProcessing>()
-    private val fxmlFiles by inject<FxmlFiles>()
+    private val component: MCPIDEComponent = DaggerMCPIDEComponent.builder()
+        .appInstance(this)
+        .coroutineSupportModule(CoroutineSupportModule)
+        .commsModule(CommsModule)
+        .viewModule(ViewModule)
+        .modelModule(ModelModule)
+        .httpModule(HttpModule)
+        .csvModule(CsvModule)
+        .jsonModule(JsonModule)
+        .xmlModule(XmlModule)
+        .fxModule(FxModule)
+        .mavenModule(RepositorySystemModule)
+        .build()
 
     lateinit var stage: Stage
         private set
 
     override fun start(primaryStage: Stage) {
+        logger.info { "Setting up primary stage" }
         this.stage = primaryStage
-        stage.scene = Scene(fxmlFiles.main().parent)
+        val (parent, controller) = component.fxmlFiles.main()
+        stage.scene = Scene(parent)
         stage.title = "MCPIDE"
         stage.show()
         stage.centerOnScreen()
         stage.isMaximized = true
-        viewEventLoop.start()
-        modelProcessing.start()
+        logger.info { "Primary stage opened." }
+        controller.startEventLoop()
+        component.modelProcessing.start()
+        logger.info { "Started event loops." }
     }
 }
 
-private val appInstanceModule = module {
-    single {
-        when {
-            ::APP_INSTANCE.isInitialized -> APP_INSTANCE
-            else -> throw IllegalStateException("No app initialized yet!")
-        }
+@[Singleton Component(
+    modules = [
+        CoroutineSupportModule::class,
+        CommsModule::class,
+        ViewModule::class,
+        ModelModule::class,
+        HttpModule::class,
+        CsvModule::class,
+        JsonModule::class,
+        XmlModule::class,
+        FxModule::class,
+        RepositorySystemModule::class
+    ]
+)]
+interface MCPIDEComponent {
+
+    @Component.Builder
+    interface Builder {
+        @BindsInstance
+        fun appInstance(mcpide: MCPIDE): Builder
+
+        fun coroutineSupportModule(module: CoroutineSupportModule): Builder
+        fun commsModule(module: CommsModule): Builder
+        fun viewModule(module: ViewModule): Builder
+        fun modelModule(module: ModelModule): Builder
+        fun httpModule(module: HttpModule): Builder
+        fun csvModule(module: CsvModule): Builder
+        fun jsonModule(module: JsonModule): Builder
+        fun xmlModule(module: XmlModule): Builder
+        fun fxModule(module: FxModule): Builder
+        fun mavenModule(module: RepositorySystemModule): Builder
+
+        fun build(): MCPIDEComponent
     }
+
+    val modelProcessing: ModelProcessing
+    val fxmlFiles: FxmlFiles
 }
 
 fun main(args: Array<String>) {
     val logger = KotlinLogging.logger { }
     try {
-        startKoin {
-            logger(KLogLogger(KotlinLogging.logger("Koin")))
-
-            modules(listOf(
-                appModule, viewModule, modelModule, httpModule, jacksonModule, appInstanceModule,
-                resolverModule
-            ))
-        }
-
+        logger.info { "Starting MCPIDE, version ${ManifestVersion.getProjectVersion()}" }
         System.setErr(getLoggingPrintStream { it::error })
 
         Application.launch(MCPIDE::class.java, *args)

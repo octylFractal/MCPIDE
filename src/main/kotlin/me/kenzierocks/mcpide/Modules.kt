@@ -27,9 +27,14 @@ package me.kenzierocks.mcpide
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.ObjectReader
+import com.fasterxml.jackson.databind.ObjectWriter
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
+import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
+import dagger.Module
+import dagger.Provides
 import javafx.fxml.FXMLLoader
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -47,117 +52,125 @@ import me.kenzierocks.mcpide.util.openErrorDialog
 import mu.KotlinLogging
 import okhttp3.Cache
 import okhttp3.OkHttpClient
-import org.koin.core.scope.Scope
-import org.koin.dsl.module
-import java.net.URL
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
-import kotlin.coroutines.CoroutineContext
+import javax.inject.Provider
+import javax.inject.Singleton
 
-private val COMMS = comms()
-val LOGGER = KotlinLogging.logger("unhandled-exceptions")
-val CO_EXCEPTION_HANDLER: (CoroutineContext, Throwable) -> Unit = { ctx, e ->
-    LOGGER.warn(e) { "Unhandled exception in ${ctx[CoroutineName]}" }
-    runBlocking { e.openErrorDialog() }
-}
-
-val viewModule = module {
-    single(View) {
-        CoroutineScope(Dispatchers.JavaFx
-            + CoroutineName("View")
-            + CoroutineExceptionHandler(CO_EXCEPTION_HANDLER)
-            + SupervisorJob())
-    }
-    single { COMMS.first }
-    single { MainController(get(), get(), get(), get(), workerScope = get(App), viewScope = get(View), fxmlFiles = get()) }
-    single { ViewEventLoop(get(View), get(), get()) }
-}
-
-val modelModule = module {
-    single { COMMS.second }
-    single { ModelProcessing(get(), get(), get(), get(), get(App), get()) }
-}
-
-val httpModule = module {
-    single {
-        OkHttpClient.Builder()
-            .cache(Cache(get<FileCache>().okHttpCacheDirectory.toFile(), 10_000_000))
-            .build()
-    }
-}
-
-class SrgCsv {
-    val mapper = CsvMapper().apply {
-        findAndRegisterModules()
-    }
-    val schema = mapper.schemaFor(jacksonTypeRef<SrgMapping>())
-        .withSkipFirstDataRow(true)!!
-    val writer = mapper.writer(schema)!!
-    val reader = mapper.readerFor(jacksonTypeRef<SrgMapping>()).with(schema)!!
-}
-
-val jacksonModule = module {
-    single {
-        XmlMapper().apply {
-            findAndRegisterModules()
-            disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+@Module
+object CoroutineSupportModule {
+    @[Provides Singleton]
+    fun provideCoroutineExceptionHandler(): CoroutineExceptionHandler {
+        val logger = KotlinLogging.logger("unhandled-exceptions")
+        return CoroutineExceptionHandler { ctx, e ->
+            logger.warn(e) { "Unhandled exception in ${ctx[CoroutineName]}" }
+            runBlocking { e.openErrorDialog() }
         }
     }
-    single {
+}
+
+@Module
+object CommsModule {
+    private val commsInstance = comms()
+
+    @[Provides Singleton]
+    fun provideViewComms() = commsInstance.first
+
+    @[Provides Singleton]
+    fun provideModelComms() = commsInstance.second
+}
+
+@Module
+object ViewModule {
+    @[Provides Singleton View]
+    fun provideViewScope(coroutineExceptionHandler: CoroutineExceptionHandler) =
+        CoroutineScope(Dispatchers.JavaFx
+            + CoroutineName("View")
+            + coroutineExceptionHandler
+            + SupervisorJob())
+}
+
+@Module
+object ModelModule {
+    @[Provides Singleton Model]
+    fun provideModelScope(coroutineExceptionHandler: CoroutineExceptionHandler) =
+        CoroutineScope(Dispatchers.Default
+            + CoroutineName("ModelWorker")
+            + coroutineExceptionHandler
+            + SupervisorJob())
+}
+
+@Module
+object HttpModule {
+    @[Provides Singleton]
+    fun provideHttpClient(fileCache: FileCache) =
+        OkHttpClient.Builder()
+            .cache(Cache(fileCache.okHttpCacheDirectory.toFile(), 10_000_000))
+            .build()
+}
+
+@Module
+object CsvModule {
+    @[Provides Singleton]
+    fun provideCsvMapper() = CsvMapper().apply { findAndRegisterModules() }
+
+    @[Provides Singleton Srg]
+    fun provideSrgSchema(mapper: CsvMapper): CsvSchema =
+        mapper.schemaFor(jacksonTypeRef<SrgMapping>())
+            .withSkipFirstDataRow(true)
+
+    @[Provides Singleton Srg]
+    fun provideSrgWriter(mapper: CsvMapper, @Srg schema: CsvSchema): ObjectWriter =
+        mapper.writer(schema)
+
+    @[Provides Singleton Srg]
+    fun provideSrgReader(mapper: CsvMapper, @Srg schema: CsvSchema): ObjectReader =
+        mapper.readerFor(jacksonTypeRef<SrgMapping>()).with(schema)
+}
+
+@Module
+object JsonModule {
+    @[Provides Singleton]
+    fun provideJsonMapper() =
         ObjectMapper().apply {
             findAndRegisterModules()
             disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         }
-    }
-    single { SrgCsv() }
 }
 
-private inline fun <reified T> Scope.controllerEntry(): Pair<Class<*>, T> {
-    return T::class.java to get(T::class, null, null)
+@Module
+object XmlModule {
+    @[Provides Singleton]
+    fun provideXmlMapper() =
+        XmlMapper().apply {
+            findAndRegisterModules()
+            disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        }
 }
 
-private inline fun <reified T> Scope.controllerCreator(
-    crossinline block: Scope.() -> T
-): Pair<Class<*>, () -> T> {
-    return T::class.java to { this.block() }
-}
+interface ControllerFactory : Callback<Class<*>, Any>
 
-val appModule = module {
-    single(App) {
-        CoroutineScope(Dispatchers.Default
-            + CoroutineName("AppWorker")
-            + CoroutineExceptionHandler(CO_EXCEPTION_HANDLER)
-            + SupervisorJob())
-    }
-    single<Callback<Class<*>, Any>>(ControllerFactory) {
-        val staticControllers = mapOf(
-            controllerEntry<MainController>()
+private inline fun <reified T> controllerBind(source: Provider<T>) : Pair<Class<*>, () -> T> =
+    T::class.java to source::get
+
+@Module
+object FxModule {
+    @[Provides Singleton]
+    fun provideControllerFactory(
+        mainController: Provider<MainController>,
+        fileAskDialogController: Provider<FileAskDialogController>
+    ): ControllerFactory {
+        val controllers = mapOf(
+            controllerBind(mainController),
+            controllerBind(fileAskDialogController)
         )
-        val freshControllers = mapOf(
-            controllerCreator {
-                FileAskDialogController(
-                    viewScope = get(View)
-                )
-            }
-        )
-        return@single Callback {
-            staticControllers[it]
-                ?: freshControllers[it]?.invoke()
-                ?: throw IllegalStateException("No controller for class $it")
+        return object : ControllerFactory {
+            override fun call(cls: Class<*>) =
+                (controllers[cls] ?: throw IllegalStateException("No controller for class ${cls.name}"))()
         }
     }
-    single<(URL) -> FXMLLoader>(FxmlLoader) {
-        return@single {
-            FXMLLoader(it, null, null, get(ControllerFactory), StandardCharsets.UTF_8)
-        }
-    }
-    single { FxmlFiles(get(FxmlLoader)) }
-    single {
-        val configDir = Paths.get(System.getenv("XDG_CONFIG_DIRECTORY")
-            ?: "${System.getProperty("user.home", ".")}/.config")
-        val mcpDir = configDir.resolve("mcpide")
-        Files.createDirectories(mcpDir)
-        FileCache(mcpDir)
-    }
+
+    @Provides
+    fun provideFxmlLoader(controllerFactory: ControllerFactory) =
+        FXMLLoader(null, null, null, controllerFactory, StandardCharsets.UTF_8)
+
 }

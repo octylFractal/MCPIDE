@@ -3,7 +3,9 @@ import net.minecrell.gradle.licenser.LicenseExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.3.41"
+    val kt = "1.3.41"
+    kotlin("jvm") version kt
+    kotlin("kapt") version kt
     id("com.techshroom.incise-blue") version "0.3.14"
     id("com.github.johnrengelman.shadow") version "5.1.0"
     id("net.researchgate.release") version "2.8.1"
@@ -22,6 +24,11 @@ inciseBlue {
     }
     license()
     ide()
+}
+
+kapt {
+    useBuildCache = true
+    correctErrorTypes = true
 }
 
 tasks.withType<KotlinCompile> {
@@ -50,7 +57,6 @@ dependencies {
         "implementation"(lib("classic"))
     }
     "implementation"("com.google.guava:guava:28.0-jre")
-    "implementation"("org.koin:koin-core:2.0.1")
     "implementation"("org.fxmisc.richtext:richtextfx:0.10.1")
     commonLib("com.github.javaparser", "javaparser", "3.14.9") {
         "implementation"(lib("core"))
@@ -92,6 +98,16 @@ dependencies {
     "implementation"("javax.xml.bind:jaxb-api:2.3.1")
     "implementation"("com.squareup.okhttp3:okhttp:4.0.1")
     "implementation"("de.skuzzle:semantic-version:2.0.0")
+
+    commonLib("com.google.dagger", "dagger", "2.24") {
+        "implementation"(lib())
+        "kapt"(lib("compiler"))
+    }
+
+    commonLib("net.octyl.apt-creator", "apt-creator", "0.1.4") {
+        "implementation"(lib("annotations"))
+        "kapt"(lib("processor"))
+    }
 
     commonLib("org.junit.jupiter", "junit-jupiter", "5.5.1") {
         "testImplementation"(lib("api"))

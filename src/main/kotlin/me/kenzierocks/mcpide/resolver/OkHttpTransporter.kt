@@ -36,7 +36,6 @@ import kotlinx.coroutines.io.ByteChannel
 import kotlinx.coroutines.io.jvm.javaio.toOutputStream
 import kotlinx.coroutines.io.jvm.nio.copyTo
 import kotlinx.coroutines.runBlocking
-import me.kenzierocks.mcpide.CO_EXCEPTION_HANDLER
 import me.kenzierocks.mcpide.util.CallResult
 import me.kenzierocks.mcpide.util.enqueueSuspend
 import me.kenzierocks.mcpide.util.toHttpUrl
@@ -67,13 +66,17 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketAddress
 import java.util.Properties
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-class OkHttpWagon(
-    private var httpClient: OkHttpClient
+class OkHttpWagon @Inject constructor(
+    private var httpClient: OkHttpClient,
+    coroutineExceptionHandler: CoroutineExceptionHandler
 ) : StreamWagon() {
     private val ioScope = CoroutineScope(Dispatchers.IO
         + CoroutineName("OkHttpWagonPuts")
-        + CoroutineExceptionHandler(CO_EXCEPTION_HANDLER))
+        + coroutineExceptionHandler)
     private var headers: Headers = Headers.Builder().build()
     // Headers hack, to comply with expected http-Wagon behavior
     var httpHeaders: Properties
@@ -211,12 +214,13 @@ private val ProxyInfo.socketAddress: SocketAddress
     get() =
         InetSocketAddress.createUnresolved(host, port)
 
-class OkHttpWagonProvider(
-    private val httpClient: OkHttpClient
+@Singleton
+class OkHttpWagonProvider @Inject constructor(
+    private val delegate: Provider<OkHttpWagon>
 ) : WagonProvider {
 
     override fun lookup(roleHint: String): Wagon = when (roleHint) {
-        "http", "https" -> OkHttpWagon(httpClient)
+        "http", "https" -> delegate.get()
         else -> throw IllegalArgumentException("Unsupported role: $roleHint")
     }
 

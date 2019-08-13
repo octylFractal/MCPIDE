@@ -31,13 +31,16 @@ import me.kenzierocks.mcpide.data.MojangVersionManifest
 import me.kenzierocks.mcpide.mcp.McpContext
 import me.kenzierocks.mcpide.mcp.getStepOutput
 import me.kenzierocks.mcpide.util.toHttpUrl
-import org.koin.core.KoinComponent
-import org.koin.core.inject
+import okhttp3.OkHttpClient
 import java.nio.file.Files
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object DownloadPackageManifestFunction : AbstractFileDownloadFunction(), KoinComponent {
-
-    private val mapper by inject<ObjectMapper>()
+@Singleton
+class DownloadPackageManifestFunction @Inject constructor(
+    private val mapper: ObjectMapper,
+    httpClient: OkHttpClient
+) : AbstractFileDownloadFunction(httpClient) {
 
     override fun resolveOutput(context: McpContext) = "package_manifest.json"
 

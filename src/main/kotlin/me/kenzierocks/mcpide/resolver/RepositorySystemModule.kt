@@ -25,6 +25,8 @@
 
 package me.kenzierocks.mcpide.resolver
 
+import dagger.Module
+import dagger.Provides
 import me.kenzierocks.mcpide.data.FileCache
 import org.apache.maven.repository.internal.DefaultArtifactDescriptorReader
 import org.apache.maven.repository.internal.DefaultVersionRangeResolver
@@ -47,30 +49,32 @@ import org.eclipse.aether.resolution.ArtifactRequest
 import org.eclipse.aether.resolution.ArtifactResult
 import org.eclipse.aether.spi.connector.RepositoryConnectorFactory
 import org.eclipse.aether.spi.connector.transport.TransporterFactory
+import org.eclipse.aether.spi.locator.ServiceLocator
 import org.eclipse.aether.transport.wagon.WagonProvider
 import org.eclipse.aether.transport.wagon.WagonTransporterFactory
-import org.koin.dsl.module
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private inline fun <reified R, reified T : R> DefaultServiceLocator.addService() {
     addService(R::class.java, T::class.java)
 }
 
-class MavenAccess(
+@Singleton
+class MavenAccess @Inject constructor(
     val system: RepositorySystem,
     val session: RepositorySystemSession,
-    val repositories: List<RemoteRepository>
+    val repositories: RemoteRepositories
 ) {
     fun resolveArtifact(artifact: Artifact,
                         repositories: List<RemoteRepository> = this.repositories): ArtifactResult =
         system.resolveArtifact(session, ArtifactRequest(artifact, repositories, ""))
 }
 
-/**
- * Module responsible for resolving the entire [RepositorySystem] graph.
- */
-val resolverModule = module {
-    single<RepositorySystem> {
-        DefaultServiceLocator().run {
+@Module
+object RepositorySystemModule {
+    @[Provides Singleton]
+    fun provideServiceLocator(okHttpWagonProvider: OkHttpWagonProvider): ServiceLocator {
+        return DefaultServiceLocator().apply {
             setErrorHandler(object : DefaultServiceLocator.ErrorHandler() {
                 override fun serviceCreationFailed(type: Class<*>, impl: Class<*>, exception: Throwable) {
                     throw exception
@@ -88,27 +92,30 @@ val resolverModule = module {
 
             // maven-resolver-transport-wagon
             addService<TransporterFactory, WagonTransporterFactory>()
-            setServices(WagonProvider::class.java, OkHttpWagonProvider(get()))
-            getService(RepositorySystem::class.java)
+            setServices(WagonProvider::class.java, okHttpWagonProvider)
         }
     }
-    single {
-        RemoteRepositories(mapOf(
+
+    @[Provides Singleton]
+    fun provideRepositorySystem(serviceLocator: ServiceLocator): RepositorySystem {
+        return serviceLocator.getService(RepositorySystem::class.java)
+    }
+
+    @[Provides Singleton]
+    fun provideRepositories(): RemoteRepositories {
+        return RemoteRepositories(mapOf(
             "forge-maven" to "https://files.minecraftforge.net/maven",
             "mojang-maven" to "https://libraries.minecraft.net"
         ).map { (id, url) -> RemoteRepository.Builder(id, "default", url).build() })
     }
-    single<RepositorySystemSession> {
-        val fc = get<FileCache>()
-        val rs = get<RepositorySystem>()
-        MavenRepositorySystemUtils.newSession().also { sess ->
-            sess.localRepositoryManager = rs.newLocalRepositoryManager(sess,
-                LocalRepository(fc.mavenCacheDirectory.toFile())
+
+    @[Provides Singleton]
+    fun provideSession(fileCache: FileCache, repositorySystem: RepositorySystem): RepositorySystemSession {
+        return MavenRepositorySystemUtils.newSession().also { session ->
+            session.localRepositoryManager = repositorySystem.newLocalRepositoryManager(
+                session, LocalRepository(fileCache.mavenCacheDirectory.toFile())
             )
         }
-    }
-    single {
-        MavenAccess(system = get(), session = get(), repositories = get<RemoteRepositories>())
     }
 }
 

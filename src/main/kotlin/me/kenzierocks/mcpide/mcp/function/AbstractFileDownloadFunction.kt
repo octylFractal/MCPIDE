@@ -37,19 +37,17 @@ import me.kenzierocks.mcpide.util.putFile
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.koin.core.KoinComponent
-import org.koin.core.inject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-abstract class AbstractFileDownloadFunction : McpFunction, KoinComponent {
+abstract class AbstractFileDownloadFunction(
+    private val httpClient: OkHttpClient
+) : McpFunction {
 
     protected abstract fun resolveOutput(context: McpContext): String
 
     protected abstract fun resolveDlInfo(context: McpContext): DownloadInfo
-
-    private val httpClient by inject<OkHttpClient>()
 
     override suspend operator fun invoke(context: McpContext): Path {
         val output = context.arguments.getOrElse("output", {

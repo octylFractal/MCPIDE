@@ -69,7 +69,7 @@ class BadStatusCodeException(
     val code: Int
 ) : RuntimeException("Bad status code: $code")
 
-fun Response.checkStatusCode(isCodeOkay: (Int) -> Boolean = DEFAULT_OK_CODES) : Response {
+fun Response.checkStatusCode(isCodeOkay: (Int) -> Boolean = DEFAULT_OK_CODES): Response {
     if (!isCodeOkay(code)) {
         throw BadStatusCodeException(this, code)
     }

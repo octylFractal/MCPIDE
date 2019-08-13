@@ -23,51 +23,35 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.controller
+package me.kenzierocks.mcpide.mcp
 
-import javafx.fxml.FXML
-import javafx.scene.control.Label
-import javafx.scene.control.MenuButton
-import javafx.scene.control.MenuItem
-import javafx.scene.control.TextField
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.View
+import me.kenzierocks.mcpide.mcp.function.ExecuteFunction
+import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.util.gradleCoordsToMaven
+import org.eclipse.aether.artifact.DefaultArtifact
+import org.eclipse.aether.repository.RemoteRepository
 import java.nio.file.Path
 import javax.inject.Inject
 
-class FileAskDialogController @Inject constructor(
-    @View
-    private val viewScope: CoroutineScope
+class ExecuteFunctionProvider @Inject constructor(
+    private val mavenAccess: MavenAccess
 ) {
-
-    @FXML
-    private lateinit var fileTypeLabel: Label
-    @FXML
-    private lateinit var fileText: TextField
-    @FXML
-    private lateinit var selectMenu: MenuButton
-    private val stage get() = fileText.scene.window
-
-    var fileType: String
-        get() = fileTypeLabel.text.substringBefore(':')
-        set(value) {
-            fileTypeLabel.text = "$value:"
-        }
-
-    fun addFileSources(sources: Iterable<FileSource>) {
-        val menu = selectMenu
-        sources.forEach { source ->
-            val item = MenuItem(source.description)
-            item.setOnAction {
-                viewScope.launch {
-                    source.retrieveFile(stage)?.let { fileText.text = it.toAbsolutePath().toString() }
-                }
-            }
-            menu.items.add(item)
-        }
+    fun provide(step: McpConfig.Step,
+                functions: Map<String, McpConfig.Function>,
+                data: Map<String, String>): McpFunction {
+        val jsonFunc = functions[step.type]
+            ?: throw IllegalArgumentException("Invalid MCP config, unknown function type: ${step.type}")
+        val jar = fetchFunction(step.type, jsonFunc)
+        return ExecuteFunction(jar, jsonFunc.jvmArgs, jsonFunc.args, data)
     }
 
-    val path: Path? get() = fileText.text.takeUnless { it.isEmpty() }?.let { Path.of(it) }
+    private fun fetchFunction(type: String, func: McpConfig.Function): Path {
+        val artifact = mavenAccess.resolveArtifact(DefaultArtifact(gradleCoordsToMaven(func.version)),
+            listOf(func.repo).map { RemoteRepository.Builder(type, "default", func.repo).build() })
+        if (artifact.isResolved) {
+            return artifact.artifact.file.toPath()
+        }
+        throw IllegalArgumentException("No such function JAR: ${func.version} (resolving '$type')")
+    }
 
 }

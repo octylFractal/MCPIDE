@@ -26,6 +26,7 @@
 package me.kenzierocks.mcpide
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +50,8 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
-import me.kenzierocks.mcpide.project.Project
+import me.kenzierocks.mcpide.mcp.McpRunnerCreator
+import me.kenzierocks.mcpide.project.ProjectCreator
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
 import me.kenzierocks.mcpide.resolver.MavenAccess
@@ -60,14 +62,20 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.ZipFile
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ModelProcessing(
+@Singleton
+class ModelProcessing @Inject constructor(
     private val jsonMapper: ObjectMapper,
-    private val srgCsv: SrgCsv,
-    private val mavenAccess: MavenAccess,
+    @Srg
+    private val srgReader: ObjectReader,
     private val fileCache: FileCache,
+    @Model
     private val workerScope: CoroutineScope,
-    private val modelComms: ModelComms
+    private val modelComms: ModelComms,
+    private val projectCreator: ProjectCreator,
+    private val mcpRunnerCreator: McpRunnerCreator
 ) {
     private val logger = KotlinLogging.logger { }
     private var projectWorker: ProjectWorker? = null
@@ -97,12 +105,11 @@ class ModelProcessing(
                 jsonMapper.readValue<McpConfig>(eis)
             }
         }
-        val runner = McpRunner(
+        val runner = mcpRunnerCreator.create(
             mcpConfigZip,
             configJson,
             "joined",
-            fileCache.mcpWorkDirectory.resolve(mcpConfigZip.fileName.toString().substringBefore(".zip")),
-            mavenAccess
+            fileCache.mcpWorkDirectory.resolve(mcpConfigZip.fileName.toString().substringBefore(".zip"))
         )
         val decompiledJar = decompileJar(runner) ?: return
         requireProjectWorker().write(suspendFor = true) {
@@ -112,6 +119,7 @@ class ModelProcessing(
 
     private suspend fun decompileJar(runner: McpRunner): Path? {
         return try {
+            sendMessage(StatusUpdate("MC Decompile", "Starting decompile"))
             runner.run { step -> sendMessage(StatusUpdate("MC Decompile", step)) }
         } catch (e: Exception) {
             logger.warn(e) { "Error while importing MCP config." }
@@ -140,7 +148,7 @@ class ModelProcessing(
         require(Files.exists(entryPath)) { "No $entry in $srgMappingsZip" }
         return flow {
             Files.newBufferedReader(entryPath).use { reader ->
-                srgCsv.reader.readValues<SrgMapping>(reader).forEach {
+                srgReader.readValues<SrgMapping>(reader).forEach {
                     emit(it)
                 }
             }
@@ -149,11 +157,13 @@ class ModelProcessing(
 
     private suspend fun loadProject(path: Path) {
         projectWorker?.run { channel.close() }
-        val p = Project(path, srgCsv).let { proj ->
+        val p = projectCreator.create(path).let { proj ->
             workerScope.projectWorker(proj).also { projectWorker = it }
         }
+        sendMessage(StatusUpdate("", "Opening project at $path"))
         p.write {
             load()
+            sendMessage(StatusUpdate("", ""))
             if (isInitializedOnDisk()) {
                 sendMessage(OpenInFileTree(p.read { directory }))
             } else {

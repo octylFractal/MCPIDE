@@ -25,43 +25,22 @@
 
 package me.kenzierocks.mcpide.mcp
 
-import me.kenzierocks.mcpide.mcp.function.DownloadClientFunction
-import me.kenzierocks.mcpide.mcp.function.DownloadPackageManifestFunction
-import me.kenzierocks.mcpide.mcp.function.DownloadServerFunction
-import me.kenzierocks.mcpide.mcp.function.DownloadVersionManifestFunction
-import me.kenzierocks.mcpide.mcp.function.ExecuteFunction
-import me.kenzierocks.mcpide.mcp.function.InjectFunction
-import me.kenzierocks.mcpide.mcp.function.ListLibrariesFunction
-import me.kenzierocks.mcpide.mcp.function.PatchFunction
-import me.kenzierocks.mcpide.mcp.function.StripJarFunction
-import me.kenzierocks.mcpide.resolver.MavenAccess
-import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import mu.KotlinLogging
-import org.eclipse.aether.artifact.DefaultArtifact
-import org.eclipse.aether.repository.RemoteRepository
+import net.octyl.aptcreator.GenerateCreator
+import net.octyl.aptcreator.Provided
 import java.nio.file.Path
 import java.util.zip.ZipFile
 
-private fun createBuiltInFunction(type: String, data: Map<String, String>): McpFunction? {
-    return when (type) {
-        "downloadManifest" -> DownloadVersionManifestFunction
-        "downloadJson" -> DownloadPackageManifestFunction
-        "downloadClient" -> DownloadClientFunction
-        "downloadServer" -> DownloadServerFunction
-        "strip" -> StripJarFunction(data.getValue("mappings"))
-        "listLibraries" -> ListLibrariesFunction
-        "inject" -> InjectFunction(data.getValue("inject"))
-        "patch" -> PatchFunction(data.getValue("patches"))
-        else -> null
-    }
-}
-
+@GenerateCreator
 class McpRunner(
     private val mcpConfigZip: Path,
     private val config: McpConfig,
     side: String,
     private val mcpDirectory: Path,
-    private val mavenAccess: MavenAccess
+    @Provided
+    private val builtInFunctionProvider: BuiltInFunctionProvider,
+    @Provided
+    private val executeFunctionProvider: ExecuteFunctionProvider
 ) {
     private val logger = KotlinLogging.logger("MCPOutput")
 
@@ -84,30 +63,12 @@ class McpRunner(
             ?: throw IllegalArgumentException("No steps for $side, config zip: $mcpConfigZip")
 
         steps = stepList.associateBy({ it.name }) { step ->
-            val function = createBuiltInFunction(step.type, data)
-                ?: createExecuteFunction(step, config.functions, data)
+            val function = builtInFunctionProvider.provide(step.type, data)
+                ?: executeFunctionProvider.provide(step, config.functions, data)
             val workDir = mcpDirectory.resolve(step.name)
 
             McpStep(context, step.name, function, step.values, workDir)
         }
-    }
-
-    private fun createExecuteFunction(step: McpConfig.Step,
-                                      functions: Map<String, McpConfig.Function>,
-                                      data: Map<String, String>): McpFunction {
-        val jsonFunc = functions[step.type]
-            ?: throw IllegalArgumentException("Invalid MCP config, unknown function type: ${step.type}")
-        val jar = fetchFunction(step.type, jsonFunc)
-        return ExecuteFunction(jar, jsonFunc.jvmArgs, jsonFunc.args, data)
-    }
-
-    private fun fetchFunction(type: String, func: McpConfig.Function): Path {
-        val artifact = mavenAccess.resolveArtifact(DefaultArtifact(gradleCoordsToMaven(func.version)),
-            listOf(func.repo).map { RemoteRepository.Builder(type, "default", func.repo).build() })
-        if (artifact.isResolved) {
-            return artifact.artifact.file.toPath()
-        }
-        throw IllegalArgumentException("No such function JAR: ${func.version} (resolving '$type')")
     }
 
     /**

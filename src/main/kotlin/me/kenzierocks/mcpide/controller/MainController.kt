@@ -61,7 +61,9 @@ import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
+import me.kenzierocks.mcpide.Model
 import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
@@ -94,13 +96,16 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.Scanner
 import java.util.stream.Collectors.joining
+import javax.inject.Inject
 
-class MainController(
+class MainController @Inject constructor(
     private val app: MCPIDE,
     private val xmlMapper: XmlMapper,
     private val mavenAccess: MavenAccess,
     private val viewComms: ViewComms,
+    @Model
     private val workerScope: CoroutineScope,
+    @View
     private val viewScope: CoroutineScope,
     private val fxmlFiles: FxmlFiles
 ) {
@@ -129,6 +134,15 @@ class MainController(
     private var defaultDirectory: Path = Path.of(System.getProperty("user.home"))
     private val mappings = mutableMapOf<String, SrgMapping>()
 
+    fun startEventLoop() {
+        viewScope.launch {
+            while (!viewComms.viewChannel.isClosedForReceive) {
+                val msg = viewComms.viewChannel.receive()
+                handleMessage(msg)
+            }
+        }
+    }
+
     @FXML
     fun initialize() {
         fileTree.isEditable = false
@@ -151,7 +165,7 @@ class MainController(
         return path != null && Files.exists(path) && !Files.isDirectory(path)
     }
 
-    suspend fun handleMessage(viewMessage: ViewMessage) {
+    private suspend fun handleMessage(viewMessage: ViewMessage) {
         exhaustive(when (viewMessage) {
             is OpenInFileTree -> {
                 val dirTree = workerScope.async { expandDirectory(viewMessage.directory) }
@@ -266,7 +280,8 @@ class MainController(
 
     private fun updateStatus(msg: StatusUpdate) {
         // for now, just overwrite
-        statusLabel.text = "${msg.category}: ${msg.status}"
+        statusLabel.text = msg.status
+            .takeIf { it.isNotBlank() }?.let { status -> "${msg.category}: $status" } ?: ""
     }
 
     private fun sendMessage(modelMessage: ModelMessage) {
@@ -275,6 +290,7 @@ class MainController(
 
     private suspend fun askDecompileSetup() {
         val file = openFileAskDialog(
+            "MCP Config",
             "Decompile Setup",
             listOf(
                 mavenFileSource(
@@ -294,6 +310,7 @@ class MainController(
 
     private suspend fun askInitialMappings() {
         val file = openFileAskDialog(
+            "MCP Names",
             "Initial Mappings",
             listOf(
                 mavenFileSource(
@@ -314,7 +331,7 @@ class MainController(
     private fun mavenFileSource(
         description: String, group: String, name: String,
         dialogTitle: String, header: String
-    ) : FileSource {
+    ): FileSource {
         return MavenSource(
             description, group, name, dialogTitle, header, xmlMapper, mavenAccess, workerScope
         )
@@ -324,6 +341,7 @@ class MainController(
      * Common code for file ask dialogs.
      */
     private suspend fun openFileAskDialog(
+        type: String,
         title: String,
         fileSources: Iterable<FileSource>
     ): Path? {
@@ -335,6 +353,7 @@ class MainController(
         dialog.buttonTypes.addAll(ButtonType.CANCEL, ButtonType.FINISH)
         val (parent, controller) = fxmlFiles.fileAskDialog()
         controller.addFileSources(fileSources)
+        controller.fileType = type
         dialog.dialogPane.content = parent
         dialog.dialogPane.setPrefSizeFromContent()
         while (controller.path == null) {

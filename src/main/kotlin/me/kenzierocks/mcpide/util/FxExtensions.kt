@@ -34,7 +34,6 @@ import javafx.scene.Parent
 import javafx.scene.control.Alert
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
-import javafx.scene.control.Label
 import javafx.scene.control.TextArea
 import javafx.scene.layout.Border
 import javafx.scene.layout.Region
@@ -44,7 +43,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.javafx.JavaFx
-import kotlinx.coroutines.javafx.JavaFxDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.exhaustive
@@ -106,7 +104,7 @@ suspend fun Throwable.openErrorDialog(title: String = "Error",
 inline fun <reified P : Parent> Node.findParent(): P? {
     var n: Node = this
     while (true) {
-        exhaustive(when(val p = n.parent) {
+        exhaustive(when (val p = n.parent) {
             null -> return null
             is P -> return p
             else -> n = p

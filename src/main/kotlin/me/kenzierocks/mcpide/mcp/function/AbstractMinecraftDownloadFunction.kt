@@ -33,14 +33,16 @@ import me.kenzierocks.mcpide.data.MojangPackageManifest
 import me.kenzierocks.mcpide.mcp.McpContext
 import me.kenzierocks.mcpide.mcp.getStepOutput
 import me.kenzierocks.mcpide.util.toHttpUrl
-import org.koin.core.inject
+import okhttp3.OkHttpClient
 import java.nio.file.Files
+import javax.inject.Inject
+import javax.inject.Singleton
 
 abstract class AbstractMinecraftDownloadFunction(
-    private val artifact: String
-) : AbstractFileDownloadFunction() {
-
-    private val mapper by inject<ObjectMapper>()
+    private val artifact: String,
+    private val mapper: ObjectMapper,
+    httpClient: OkHttpClient
+) : AbstractFileDownloadFunction(httpClient) {
 
     override fun resolveOutput(context: McpContext) = "$artifact.jar"
 
@@ -59,5 +61,14 @@ abstract class AbstractMinecraftDownloadFunction(
 
 }
 
-object DownloadClientFunction : AbstractMinecraftDownloadFunction("client")
-object DownloadServerFunction : AbstractMinecraftDownloadFunction("server")
+@Singleton
+class DownloadClientFunction @Inject constructor(
+    mapper: ObjectMapper,
+    httpClient: OkHttpClient
+) : AbstractMinecraftDownloadFunction("client", mapper, httpClient)
+
+@Singleton
+class DownloadServerFunction @Inject constructor(
+    mapper: ObjectMapper,
+    httpClient: OkHttpClient
+) : AbstractMinecraftDownloadFunction("server", mapper, httpClient)
