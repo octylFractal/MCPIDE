@@ -42,12 +42,14 @@ data class SrgMapping(
         ?: throw IllegalArgumentException("SRG name did not contain type prefix")
 }
 
+@Suppress("unused")
 enum class Side {
     CLIENT,
     SERVER,
     JOINED
 }
 
+@Suppress("unused")
 enum class SrgType(val prefix: String) {
     FUNCTION("func"),
     FIELD("field"),

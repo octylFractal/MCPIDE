@@ -418,10 +418,19 @@ class PathCell : TreeCell<Path>() {
             text = null
             graphic = null
         } else {
-            text = item.fileName.toString()
+            text = item.fileName?.toString() ?: fsRootName(item)
             graphic = ImageView(
                 if (Files.isDirectory(item)) IMAGE_FOLDER else IMAGE_FILE
             )
+        }
+    }
+
+    private fun fsRootName(path: Path): String {
+        return when (path.fileSystem.provider().scheme) {
+            // jar:file://...!/
+            "zip", "jar" -> path.toUri().rawSchemeSpecificPart
+                .removePrefix("file://").removeSuffix("!/")
+            else -> "/"
         }
     }
 }

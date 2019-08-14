@@ -79,6 +79,7 @@ class OkHttpWagon @Inject constructor(
         + coroutineExceptionHandler)
     private var headers: Headers = Headers.Builder().build()
     // Headers hack, to comply with expected http-Wagon behavior
+    @Suppress("unused")
     var httpHeaders: Properties
         get() = headers.toMultimap().mapValuesTo(Properties(), { (_, v) -> v.firstOrNull() })
         set(value) {

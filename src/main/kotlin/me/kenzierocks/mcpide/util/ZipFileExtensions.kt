@@ -25,28 +25,9 @@
 
 package me.kenzierocks.mcpide.util
 
-import java.nio.file.Files
-import java.nio.file.Path
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 operator fun ZipFile.get(name: String): ZipEntry? = getEntry(name)
 
 fun ZipFile.requireEntry(name: String) = this[name] ?: throw IllegalStateException("No entry '$name'")
-
-fun ZipFile.extractEntryTo(name: String, file: Path) {
-    val ze = requireEntry(name)
-    Files.createDirectories(file.parent)
-    getInputStream(ze).use { input ->
-        Files.newOutputStream(file).use { output ->
-            input.copyTo(output)
-        }
-    }
-}
-
-fun ZipFile.extractTo(dir: Path, names: List<String>) = extractTo(dir, names.associateBy { it })
-fun ZipFile.extractTo(dir: Path, nameMap: Map<String, String>) {
-    nameMap.forEach { (entName, outName) ->
-        extractEntryTo(entName, dir.resolve(outName))
-    }
-}

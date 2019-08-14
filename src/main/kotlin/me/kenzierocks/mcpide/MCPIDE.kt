@@ -42,7 +42,7 @@ import kotlin.system.exitProcess
 
 class MCPIDE : Application() {
 
-    private val logger = KotlinLogging.logger {  }
+    private val logger = KotlinLogging.logger { }
 
     private val component: MCPIDEComponent = DaggerMCPIDEComponent.builder()
         .appInstance(this)

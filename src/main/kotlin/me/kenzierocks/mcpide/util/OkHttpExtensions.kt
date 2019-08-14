@@ -33,12 +33,12 @@ import okhttp3.Response
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-sealed class CallResult(val call: Call) {
-    class Success(call: Call, val response: Response) : CallResult(call) {
+sealed class CallResult {
+    class Success(val response: Response) : CallResult() {
         override fun throwIfFailed() = response
     }
 
-    class Failure(call: Call, val error: IOException) : CallResult(call) {
+    class Failure(private val error: IOException) : CallResult() {
         override fun throwIfFailed(): Nothing = throw error
     }
 
@@ -52,11 +52,11 @@ suspend fun Call.enqueueSuspend(): CallResult {
     return suspendCoroutine {
         enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) {
-                it.resume(CallResult.Failure(call, e))
+                it.resume(CallResult.Failure(e))
             }
 
             override fun onResponse(call: Call, response: Response) {
-                it.resume(CallResult.Success(call, response))
+                it.resume(CallResult.Success(response))
             }
         })
     }
@@ -65,13 +65,12 @@ suspend fun Call.enqueueSuspend(): CallResult {
 private val DEFAULT_OK_CODES = (200..299)::contains
 
 class BadStatusCodeException(
-    val response: Response,
-    val code: Int
+    code: Int
 ) : RuntimeException("Bad status code: $code")
 
 fun Response.checkStatusCode(isCodeOkay: (Int) -> Boolean = DEFAULT_OK_CODES): Response {
     if (!isCodeOkay(code)) {
-        throw BadStatusCodeException(this, code)
+        throw BadStatusCodeException(code)
     }
     return this
 }

@@ -54,7 +54,6 @@ import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.project.ProjectCreator
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
-import me.kenzierocks.mcpide.resolver.MavenAccess
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
@@ -164,16 +163,14 @@ class ModelProcessing @Inject constructor(
         p.write {
             load()
             sendMessage(StatusUpdate("", ""))
-            if (isInitializedOnDisk()) {
-                sendMessage(OpenInFileTree(p.read { directory }))
-            } else {
-                if (!hasInitialMappingsFile()) {
-                    sendMessage(AskInitialMappings)
-                }
-                if (!hasMinecraftJar()) {
-                    sendMessage(AskDecompileSetup)
-                }
+            if (!hasInitialMappingsFile()) {
+                sendMessage(AskInitialMappings)
             }
+            if (!hasMinecraftJar()) {
+                sendMessage(AskDecompileSetup)
+            }
+            val fs = FileSystems.newFileSystem(minecraftJar, null)
+            sendMessage(OpenInFileTree(fs.getPath("/")))
         }
     }
 

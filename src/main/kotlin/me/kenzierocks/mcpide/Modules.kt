@@ -149,7 +149,7 @@ object XmlModule {
 
 interface ControllerFactory : Callback<Class<*>, Any>
 
-private inline fun <reified T> controllerBind(source: Provider<T>) : Pair<Class<*>, () -> T> =
+private inline fun <reified T> controllerBind(source: Provider<T>): Pair<Class<*>, () -> T> =
     T::class.java to source::get
 
 @Module

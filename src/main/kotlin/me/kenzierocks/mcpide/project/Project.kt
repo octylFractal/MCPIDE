@@ -63,7 +63,7 @@ class Project(
 
     private val srgMappingsFile: Path = directory.resolve("srg-mappings.csv.gz")
     private val exportsFile: Path = directory.resolve("srg-exports.csv.gz")
-    private val minecraftJar: Path = directory.resolve("minecraft.jar")
+    val minecraftJar: Path = directory.resolve("minecraft.jar")
     private val srgMappings = mutableMapOf<String, SrgMapping>()
     private val exportMappings = mutableSetOf<String>()
     var dirty = false

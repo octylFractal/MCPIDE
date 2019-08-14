@@ -29,8 +29,6 @@ import com.google.common.base.Throwables
 import javafx.beans.value.ChangeListener
 import javafx.beans.value.ObservableValue
 import javafx.event.EventHandler
-import javafx.scene.Node
-import javafx.scene.Parent
 import javafx.scene.control.Alert
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
@@ -45,7 +43,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.kenzierocks.mcpide.exhaustive
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
