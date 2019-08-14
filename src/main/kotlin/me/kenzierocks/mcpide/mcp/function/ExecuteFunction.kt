@@ -45,6 +45,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 private val REPLACE_PATTERN = Regex("^\\{(\\w+)}$")
+private val LOG_LEVEL_PATTERN = Regex("TRACE|DEBUG|INFO|WARN|ERROR")
 
 class ExecuteFunction(
     private val jar: Path,
@@ -121,7 +122,13 @@ class ExecuteFunction(
                         .onMalformedInput(CodingErrorAction.REPLACE)
                         .onUnmappableCharacter(CodingErrorAction.REPLACE)).useLines { lines ->
                         lines.forEach { line ->
-                            context.logger.info { line }
+                            when (LOG_LEVEL_PATTERN.find(line)?.value) {
+                                "TRACE" -> context.logger.trace { line }
+                                "DEBUG" -> context.logger.debug { line }
+                                "WARN" -> context.logger.warn { line }
+                                "ERROR" -> context.logger.warn { line }
+                                else -> context.logger.info { line }
+                            }
                         }
                     }
                 }
