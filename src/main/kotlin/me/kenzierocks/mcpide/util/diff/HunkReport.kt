@@ -30,8 +30,7 @@ class HunkReport internal constructor(
     val failure: Throwable?,
     val index: Int,
     val fuzz: Int,
-    val hunkID: Int,
-    val hunk: Hunk? = null
+    val hunkID: Int
 ) {
 
     fun hasFailed(): Boolean {

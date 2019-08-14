@@ -25,8 +25,6 @@
 
 package me.kenzierocks.mcpide.util
 
-private val GRADLE_COORDS = Regex("([^: ]+)(:)", RegexOption.COMMENTS)
-
 /**
  * Parse Gradle's `group:name:version:classifier@extension` into Maven's
  * `group:name:extension:classifier:version`

@@ -100,14 +100,3 @@ suspend fun Throwable.openErrorDialog(title: String = "Error",
         dialog.showAndSuspend()
     }
 }
-
-inline fun <reified P : Parent> Node.findParent(): P? {
-    var n: Node = this
-    while (true) {
-        exhaustive(when (val p = n.parent) {
-            null -> return null
-            is P -> return p
-            else -> n = p
-        })
-    }
-}

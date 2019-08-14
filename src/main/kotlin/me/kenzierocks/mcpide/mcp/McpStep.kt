@@ -53,5 +53,3 @@ class McpStep(
     }
 
 }
-
-inline fun <reified T : McpFunction> McpStep.isOfType() = isOfType(T::class.java)

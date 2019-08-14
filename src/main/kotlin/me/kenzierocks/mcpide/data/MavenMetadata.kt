@@ -42,6 +42,4 @@ data class MavenMetadata(
 class Versioning {
     @get:JacksonXmlElementWrapper(localName = "versions")
     lateinit var version: List<String>
-    lateinit var release: String
-    lateinit var lastUpdated: String
 }
