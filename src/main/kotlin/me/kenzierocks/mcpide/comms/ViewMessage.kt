@@ -25,7 +25,6 @@
 
 package me.kenzierocks.mcpide.comms
 
-import me.kenzierocks.mcpide.SrgMapping
 import java.nio.file.Path
 
 sealed class ViewMessage
@@ -36,13 +35,6 @@ object AskDecompileSetup : ViewMessage()
 
 data class OpenInFileTree(val directory: Path) : ViewMessage()
 
-data class UpdateMappings(val mappings: List<SrgMapping>, val merge: Boolean = false) : ViewMessage()
+data class OpenContent(val source: Path, val content: String) : ViewMessage()
 
 data class StatusUpdate(val category: String, val status: String) : ViewMessage()
-
-fun MutableMap<String, SrgMapping>.apply(update: UpdateMappings) {
-    if (!update.merge) {
-        clear()
-    }
-    update.mappings.associateByTo(this) { it.srgName }
-}

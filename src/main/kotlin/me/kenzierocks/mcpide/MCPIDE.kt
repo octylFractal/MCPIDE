@@ -71,6 +71,13 @@ class MCPIDE : Application() {
         stage.centerOnScreen()
         stage.isMaximized = true
         logger.info { "Primary stage opened." }
+        try {
+            val sv = Class.forName("org.scenicview.ScenicView")
+            val m = sv.getDeclaredMethod("show", Scene::class.java)
+            m(null, stage.scene)
+        } catch (e: Exception) {
+            logger.debug(e) { "Failed to load ScenicView." }
+        }
         controller.startEventLoop()
         component.modelProcessing.start()
         logger.info { "Started event loops." }

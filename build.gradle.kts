@@ -98,6 +98,10 @@ dependencies {
     "implementation"("javax.xml.bind:jaxb-api:2.3.1")
     "implementation"("com.squareup.okhttp3:okhttp:4.0.1")
     "implementation"("de.skuzzle:semantic-version:2.0.0")
+    val files = files("scenicview.jar")
+    if (files.all { it.exists() }) {
+        "implementation"(files)
+    }
 
     commonLib("com.google.dagger", "dagger", "2.24") {
         "implementation"(lib())
@@ -115,9 +119,13 @@ dependencies {
     }
 }
 
+tasks.shadowJar {
+    mergeServiceFiles()
+}
+
 javafx {
-    version = "12.0.1"
-    modules = listOf("fxml", "controls").map { "javafx.$it" }
+    version = "12.0.2"
+    modules = listOf("fxml", "controls", "web", "swing").map { "javafx.$it" }
 }
 
 configure<LicenseExtension> {

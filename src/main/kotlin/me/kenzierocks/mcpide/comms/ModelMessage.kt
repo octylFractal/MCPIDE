@@ -31,6 +31,8 @@ sealed class ModelMessage
 
 data class LoadProject(val projectDirectory: Path) : ModelMessage()
 
+data class OpenFile(val file: Path) : ModelMessage()
+
 object ExportMappings : ModelMessage()
 
 data class DecompileMinecraft(val mcpConfigZip: Path) : ModelMessage()

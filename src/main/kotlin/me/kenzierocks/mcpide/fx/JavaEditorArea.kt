@@ -25,41 +25,81 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.github.javaparser.Position
-import com.github.javaparser.TokenRange
+import com.github.javaparser.StringProvider
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.receiveOrNull
+import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.util.createLineOffsets
+import me.kenzierocks.mcpide.util.produceTokens
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.LineNumberFactory
+import org.fxmisc.richtext.model.PlainTextChange
+import org.fxmisc.richtext.model.StyleSpan
+import org.fxmisc.richtext.model.StyleSpans
+import org.fxmisc.richtext.model.StyleSpansBuilder
 import java.nio.file.Path
 
 class JavaEditorArea(var path: Path) : CodeArea() {
-    private var lineOffsets: IntArray? = null
-
     init {
         isEditable = false
         paragraphGraphicFactory = LineNumberFactory.get(this)
+        val flowChannel = Channel<PlainTextChange>(1)
+        val sub = multiPlainChanges()
+            .withDefaultEvent(listOf())
+            .subscribe { it.forEach(flowChannel::sendBlocking) }
+        flowChannel.invokeOnClose { sub.unsubscribe() }
+        // When no edits for 500ms, compute highlighting
+        // If new edits while highlighting, toss out highlight result
+        val highlightFlow = flowChannel.consumeAsFlow()
+            .debounce(500)
+            .mapLatest { text to computeHighlighting(this.text) }
+            .flowOn(Dispatchers.Default + CoroutineName("Highlighting"))
+        CoroutineScope(Dispatchers.JavaFx + CoroutineName("HighlightApplication")).launch {
+            highlightFlow.collect { (text, spans) ->
+                // Verify spans are valid, then apply.
+                if (spans != null && this@JavaEditorArea.text == text) {
+                    setStyleSpans(0, spans)
+                }
+            }
+        }
+    }
+
+    private suspend fun computeHighlighting(text: String): StyleSpans<Collection<String>>? {
+        val offsets = createLineOffsets(text)
+        return coroutineScope {
+            val tokens = produceTokens(StringProvider(text))
+
+            val builder = StyleSpansBuilder<Collection<String>>()
+            var lastSpan = 0
+            while (!tokens.isClosedForReceive) {
+                val token = tokens.receiveOrNull() ?: break
+                styleFor(token.kind).let { style ->
+                    val start = offsets.computeTextIndex(token.beginLine, token.beginColumn)
+                    val end = offsets.computeTextIndex(token.endLine, token.endColumn) + 1
+                    builder.add(setOf("default-text"), start - lastSpan)
+                    builder.add(setOf(style), end - start)
+                    lastSpan = end
+                }
+            }
+            builder.add(setOf("default-text"), text.length - lastSpan)
+            builder.create()
+        }
     }
 
     fun setText(text: String) {
         replaceText(text)
-        val offsets = IntArray(paragraphs.size)
-        paragraphs.forEachIndexed { i, p ->
-            offsets[i] = offsets.getOrElse(i) { 0 } + p.length()
-        }
-        lineOffsets = offsets
+        setStyleSpans(0, StyleSpans.singleton(StyleSpan(setOf("default-text"), text.length)))
     }
 
-    fun styleTokenRange(style: String, tokenRange: TokenRange) {
-        val range = tokenRange.toRange().orElse(null) ?: return
-        val begin = computeTextIndex(range.begin) ?: return
-        val end = computeTextIndex(range.end) ?: return
-        setStyleClass(begin, end, style)
-    }
-
-    private fun computeTextIndex(position: Position): Int? {
-        val offsets = lineOffsets ?: return null
-        if (position.line > offsets.lastIndex) {
-            return null
-        }
-        return offsets[position.line] + position.column
-    }
 }

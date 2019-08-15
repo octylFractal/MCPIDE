@@ -23,31 +23,29 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.util
 
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.MainController
-import javax.inject.Inject
-import javax.inject.Provider
-import javax.inject.Singleton
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
-
-@Singleton
-class FxmlFiles @Inject constructor(
-    private val fxmlLoader: Provider<FXMLLoader>
-) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
-        val loader = fxmlLoader.get()
-        loader.location = ResourceUrl(location)
-        // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
-        return LoadedParent(parent, controller)
+class LineUtilityTest {
+    @Test
+    fun oneLine() {
+        val offsets = createLineOffsets("FIRST")
+        for (i in (1..5)) {
+            assertEquals(i - 1, offsets.computeTextIndex(1, i))
+            assertEquals(6 + i - 1, offsets.computeTextIndex(2, i))
+        }
     }
-
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
+    @Test
+    fun twoLine() {
+        val offsets = createLineOffsets("FIRST\nSEC")
+        for (i in (1..5)) {
+            assertEquals(i - 1, offsets.computeTextIndex(1, i))
+            assertEquals(6 + i - 1, offsets.computeTextIndex(2, i))
+        }
+        for (i in (1..3)) {
+            assertEquals(6 + 4 + i - 1, offsets.computeTextIndex(3, i))
+        }
+    }
 }

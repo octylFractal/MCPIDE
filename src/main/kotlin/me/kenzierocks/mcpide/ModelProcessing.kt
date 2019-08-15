@@ -28,21 +28,30 @@ package me.kenzierocks.mcpide
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.github.javaparser.GeneratedJavaParserConstants
+import com.github.javaparser.StringProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toCollection
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelComms
+import me.kenzierocks.mcpide.comms.OpenContent
+import me.kenzierocks.mcpide.comms.OpenFile
 import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
@@ -54,7 +63,9 @@ import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.project.ProjectCreator
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
+import me.kenzierocks.mcpide.util.createLineOffsets
 import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.produceTokens
 import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
 import java.nio.file.FileSystems
@@ -88,12 +99,17 @@ class ModelProcessing @Inject constructor(
     fun start() {
         workerScope.launch {
             while (!modelComms.modelChannel.isClosedForReceive) {
-                exhaustive(when (val msg = modelComms.modelChannel.receive()) {
-                    is LoadProject -> loadProject(msg.projectDirectory)
-                    is ExportMappings -> exportMappings()
-                    is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)
-                    is SetInitialMappings -> initMappings(msg.srgMappingsZip)
-                })
+                try {
+                    exhaustive(when (val msg = modelComms.modelChannel.receive()) {
+                        is LoadProject -> loadProject(msg.projectDirectory)
+                        is ExportMappings -> exportMappings()
+                        is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)
+                        is SetInitialMappings -> initMappings(msg.srgMappingsZip)
+                        is OpenFile -> openFile(msg.file)
+                    })
+                } catch (e: Exception) {
+                    logger.warn(e) { "Error in worker loop" }
+                }
             }
         }
     }
@@ -176,5 +192,29 @@ class ModelProcessing @Inject constructor(
 
     private fun exportMappings() {
 
+    }
+
+    private suspend fun openFile(file: Path) {
+        val mappings = requireProjectWorker().read { mappings }
+        val text = withContext(Dispatchers.IO) { Files.readString(file) }
+        val offsets = createLineOffsets(text)
+        val builder = StringBuilder(text)
+        coroutineScope {
+            val tokens = produceTokens(StringProvider(text)).consumeAsFlow()
+                .filter { t ->
+                    t.kind == GeneratedJavaParserConstants.IDENTIFIER && t.image in mappings
+                }
+                .toCollection(mutableListOf())
+            tokens.reverse()
+            tokens.forEach { t ->
+                val newName = mappings.getValue(t.image).newName
+                builder.replace(
+                    offsets.computeTextIndex(t.beginLine, t.beginColumn),
+                    offsets.computeTextIndex(t.endLine, t.endColumn) + 1,
+                    newName
+                )
+            }
+        }
+        sendMessage(OpenContent(file, builder.toString()))
     }
 }

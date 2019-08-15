@@ -25,29 +25,30 @@
 
 package me.kenzierocks.mcpide
 
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.MainController
+import javafx.scene.image.Image
+import java.net.URL
 import javax.inject.Inject
-import javax.inject.Provider
 import javax.inject.Singleton
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
-
 @Singleton
-class FxmlFiles @Inject constructor(
-    private val fxmlLoader: Provider<FXMLLoader>
-) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
-        val loader = fxmlLoader.get()
-        loader.location = ResourceUrl(location)
-        // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
-        return LoadedParent(parent, controller)
+class Resources @Inject constructor() {
+
+    fun loadIcon(location: String): Image {
+        return Image(ResourceUrl(location).toExternalForm(), true)
     }
 
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
+    val fileIcon = loadIcon("font-awesome/file-regular.png")
+    val folderIcon = loadIcon("font-awesome/folder-regular.png")
+    val folderOpenIcon = loadIcon("font-awesome/folder-open-regular.png")
+
+}
+
+/**
+ * Helper for getting URLs from the MCPIDE resources root.
+ */
+object ResourceUrl {
+    operator fun invoke(location: String): URL {
+        return javaClass.getResource(location)
+            ?: throw IllegalArgumentException("No resource at $location")
+    }
 }

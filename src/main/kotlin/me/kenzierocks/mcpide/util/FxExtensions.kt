@@ -35,6 +35,7 @@ import javafx.scene.control.DialogPane
 import javafx.scene.control.TextArea
 import javafx.scene.layout.Border
 import javafx.scene.layout.Region
+import javafx.scene.shape.SVGPath
 import javafx.scene.text.Font
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URL
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 

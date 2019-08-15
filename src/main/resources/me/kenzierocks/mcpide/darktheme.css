@@ -1,0 +1,49 @@
+* {
+    -dark-text-color: #BABABA;
+    -dark-selected-text-color: #BABABA;
+    -dark-bg-color: #3C3F41;
+    -dark-bg-color-alt: #888e91;
+    -dark-selected-bg-color: #334DB3;
+}
+
+.root, .tab-content-area, .cell {
+    -fx-text-fill: -dark-text-color;
+    -fx-background-color: -dark-bg-color;
+}
+
+.cell > .tree-disclosure-node > .arrow {
+    -fx-background-color: -dark-text-color;
+}
+
+.split-pane, .split-pane-divider {
+    -fx-background-color: #313435;
+}
+
+.scroll-bar > .track-background {
+    -fx-background-color: -dark-bg-color;
+}
+
+.scroll-bar > .thumb {
+    -fx-background-color: -dark-bg-color-alt;
+}
+
+.tab-header-background {
+    -fx-background-color: #555a5c;
+}
+
+.tab-label {
+    -fx-text-fill: -dark-text-color;
+}
+
+.tab {
+    -fx-background-color: -dark-bg-color;
+}
+
+.tab:selected {
+    -fx-background-color: #697073;
+}
+
+.cell:selected {
+    -fx-text-fill: -dark-selected-text-color;
+    -fx-background-color: -dark-selected-bg-color;
+}

@@ -1,0 +1,35 @@
+.comment {
+    -fx-fill: gray;
+}
+.keyword {
+    -fx-fill: #CC7732;
+    -fx-font-weight: bold;
+}
+
+.identifier {
+    -fx-fill: #9876AA;
+}
+
+.string-literal {
+    -fx-fill: green;
+}
+
+.other-literal {
+    -fx-fill: cadetblue;
+}
+
+.code-area {
+    -fx-background-color: -dark-bg-color;
+    -fx-font-size: 16px;
+}
+
+.styled-text-area { -fx-highlight-fill: #999999; }
+
+.lineno {
+    -fx-text-fill: -dark-text-color;
+    -fx-background-color: -dark-bg-color;
+}
+
+.default-text {
+    -fx-fill: -dark-text-color;
+}

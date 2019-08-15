@@ -26,8 +26,9 @@
 package me.kenzierocks.mcpide.controller
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
-import com.github.javaparser.TokenRange
 import javafx.application.Platform
+import javafx.beans.InvalidationListener
+import javafx.beans.property.ReadOnlyProperty
 import javafx.fxml.FXML
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
@@ -46,23 +47,14 @@ import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.sendBlocking
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.fold
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
 import me.kenzierocks.mcpide.Model
-import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.Resources
 import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
@@ -70,13 +62,13 @@ import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
+import me.kenzierocks.mcpide.comms.OpenContent
+import me.kenzierocks.mcpide.comms.OpenFile
 import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
-import me.kenzierocks.mcpide.comms.UpdateMappings
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
-import me.kenzierocks.mcpide.comms.apply
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.resolver.MavenAccess
@@ -86,16 +78,12 @@ import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
 import java.io.File
 import java.io.IOException
-import java.nio.charset.CharacterCodingException
-import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.Scanner
-import java.util.stream.Collectors.joining
 import javax.inject.Inject
 
 class MainController @Inject constructor(
@@ -107,7 +95,8 @@ class MainController @Inject constructor(
     private val workerScope: CoroutineScope,
     @View
     private val viewScope: CoroutineScope,
-    private val fxmlFiles: FxmlFiles
+    private val fxmlFiles: FxmlFiles,
+    private val resources: Resources
 ) {
 
     companion object {
@@ -132,10 +121,11 @@ class MainController @Inject constructor(
     private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
                                   |Copyright © 2019 Kenzie Togami""".trimMargin()
     private var defaultDirectory: Path = Path.of(System.getProperty("user.home"))
-    private val mappings = mutableMapOf<String, SrgMapping>()
 
     fun startEventLoop() {
         viewScope.launch {
+            sendMessage(LoadProject(Paths.get("/home/octy/Documents/mcp_reversing")))
+            sendMessage(OpenFile(Paths.get("./logs/Test.java")))
             while (!viewComms.viewChannel.isClosedForReceive) {
                 val msg = viewComms.viewChannel.receive()
                 handleMessage(msg)
@@ -147,10 +137,14 @@ class MainController @Inject constructor(
     fun initialize() {
         fileTree.isEditable = false
         fileTree.cellFactory = Callback {
-            PathCell().also {
+            PathCell(
+                resources.fileIcon,
+                resources.folderIcon,
+                resources.folderOpenIcon
+            ).also {
                 it.setOnMouseClicked { e ->
                     if (e.clickCount == 2 && isValidPath(it.item)) {
-                        openFile(it.item)
+                        sendMessage(OpenFile(it.item))
                     }
                 }
             }
@@ -172,7 +166,7 @@ class MainController @Inject constructor(
                 fileTree.root = TreeItem(Paths.get("Loading project files..."))
                 fileTree.root = dirTree.await()
             }
-            is UpdateMappings -> mappings.apply(viewMessage)
+            is OpenContent -> openFile(viewMessage.source, viewMessage.content)
             is AskDecompileSetup -> askDecompileSetup()
             is AskInitialMappings -> askInitialMappings()
             is StatusUpdate -> updateStatus(viewMessage)
@@ -214,68 +208,12 @@ class MainController @Inject constructor(
         return currentParentNode
     }
 
-    private fun openFile(path: Path) {
-        // read in worker thread for UI responsiveness :)
-        viewScope.launch {
-            val editor = JavaEditorArea(path)
-            editor.text = "Loading file..."
-            val tab = Tab("${path.fileName}", VirtualizedScrollPane(editor))
-            textView.tabs.add(tab)
-            textView.selectionModel.select(tab)
-            triggerRefresh(editor)
-        }
-    }
-
-    private fun triggerRefresh(editor: JavaEditorArea) {
-        workerScope.launch {
-            val localMappings = mappings.toMap()
-            val content = readLines(editor.path)
-                .map { line -> line.replaceMappings(localMappings) }
-                .fold(StringBuilder()) { sb, line ->
-                    sb.append(line)
-                }.toString()
-            val textSetting = viewScope.async { editor.text = content }
-            val highlighting = highlight(content)
-            textSetting.await()
-            highlighting.consumeEach {
-                editor.styleTokenRange(it.style, it.tokenRange)
-            }
-        }
-    }
-
-    private fun String.replaceMappings(mappings: Map<String, SrgMapping>): String {
-        val s = Scanner(this)
-        s.useDelimiter(" ")
-        return s.tokens()
-            .map {
-                (mappings[it]?.newName) ?: it
-            }
-            .collect(joining(" "))
-    }
-
-    private data class Highlight(val style: String, val tokenRange: TokenRange)
-
-    private fun highlight(text: String): ReceiveChannel<Highlight> {
-        return workerScope.produce {
-
-        }
-    }
-
-    private suspend fun readLines(path: Path): Flow<String> {
-        return withContext(Dispatchers.IO) {
-            flow {
-                @Suppress("BlockingMethodInNonBlockingContext")
-                Files.newBufferedReader(path, StandardCharsets.UTF_8).useLines { lines ->
-                    try {
-                        lines.iterator().forEach {
-                            emit(it + "\n")
-                        }
-                    } catch (e: CharacterCodingException) {
-                        emit("...Error reading content, is this a binary file?")
-                    }
-                }
-            }
-        }
+    private fun openFile(path: Path, content: String) {
+        val editor = JavaEditorArea(path)
+        editor.text = content
+        val tab = Tab("${path.fileName}", VirtualizedScrollPane(editor))
+        textView.tabs.add(tab)
+        textView.selectionModel.select(tab)
     }
 
     private fun updateStatus(msg: StatusUpdate) {
@@ -402,14 +340,32 @@ class MainController @Inject constructor(
     }
 }
 
-class PathCell : TreeCell<Path>() {
-    companion object {
-        private fun image(path: String): Image {
-            return Image(MCPIDE::class.java.getResource(path).toString(), 16.0, 16.0, true, true)
-        }
+class PathCell(
+    private val imageFile: Image,
+    private val imageFolder: Image,
+    private val imageFolderOpen: Image
+) : TreeCell<Path>() {
 
-        private val IMAGE_FILE = image("glyphicons/png/glyphicons-37-file.png")
-        private val IMAGE_FOLDER = image("glyphicons/png/glyphicons-145-folder-open.png")
+    init {
+        val updateListener = InvalidationListener {
+            updateOpen(((it as ReadOnlyProperty<*>).bean as TreeItem<*>).isExpanded)
+        }
+        treeItemProperty().addListener { _, old, new ->
+            old?.expandedProperty()?.removeListener(updateListener)
+            new?.expandedProperty()?.let { prop ->
+                updateListener.invalidated(prop)
+                prop.addListener(updateListener)
+            }
+        }
+    }
+
+    private fun updateOpen(open: Boolean) {
+        val g = ((graphic as? ImageView) ?: return)
+        if (open && g.image === imageFolder) {
+            g.image = imageFolderOpen
+        } else if (!open && g.image === imageFolderOpen) {
+            g.image = imageFolder
+        }
     }
 
     override fun updateItem(item: Path?, empty: Boolean) {
@@ -419,9 +375,14 @@ class PathCell : TreeCell<Path>() {
             graphic = null
         } else {
             text = item.fileName?.toString() ?: fsRootName(item)
-            graphic = ImageView(
-                if (Files.isDirectory(item)) IMAGE_FOLDER else IMAGE_FILE
-            )
+            val imageView = ImageView(when {
+                Files.isDirectory(item) -> imageFolder
+                else -> imageFile
+            })
+            imageView.fitHeight = 16.0
+            imageView.fitWidth = 16.0
+            graphic = imageView
+            treeItem?.let { updateOpen(it.isExpanded) }
         }
     }
 

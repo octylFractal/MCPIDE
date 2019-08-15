@@ -23,31 +23,28 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.util
 
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.MainController
-import javax.inject.Inject
-import javax.inject.Provider
-import javax.inject.Singleton
+import com.github.javaparser.GeneratedJavaParserConstants
+import com.github.javaparser.GeneratedJavaParserTokenManager
+import com.github.javaparser.Provider
+import com.github.javaparser.SimpleCharStream
+import com.github.javaparser.StringProvider
+import com.github.javaparser.Token
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.produce
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
-
-@Singleton
-class FxmlFiles @Inject constructor(
-    private val fxmlLoader: Provider<FXMLLoader>
-) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
-        val loader = fxmlLoader.get()
-        loader.location = ResourceUrl(location)
-        // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
-        return LoadedParent(parent, controller)
+fun CoroutineScope.produceTokens(provider: Provider) : ReceiveChannel<Token> {
+    return produce<Token>(Dispatchers.IO) {
+        val tkmg = GeneratedJavaParserTokenManager(SimpleCharStream(provider))
+        while (true) {
+            val tk = tkmg.nextToken
+            if (tk.kind == GeneratedJavaParserConstants.EOF) {
+                break
+            }
+            channel.send(tk)
+        }
     }
-
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
 }

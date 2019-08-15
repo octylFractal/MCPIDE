@@ -23,31 +23,30 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.fx
 
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.MainController
-import javax.inject.Inject
-import javax.inject.Provider
-import javax.inject.Singleton
+import com.github.javaparser.GeneratedJavaParserConstants
+import com.github.javaparser.GeneratedJavaParserConstants.STRING_LITERAL
+import com.github.javaparser.JavaToken.Category.COMMENT
+import com.github.javaparser.JavaToken.Category.EOL
+import com.github.javaparser.JavaToken.Category.IDENTIFIER
+import com.github.javaparser.JavaToken.Category.KEYWORD
+import com.github.javaparser.JavaToken.Category.LITERAL
+import com.github.javaparser.JavaToken.Category.OPERATOR
+import com.github.javaparser.JavaToken.Category.SEPARATOR
+import com.github.javaparser.JavaToken.Category.WHITESPACE_NO_EOL
+import com.github.javaparser.TokenTypes
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
-
-@Singleton
-class FxmlFiles @Inject constructor(
-    private val fxmlLoader: Provider<FXMLLoader>
-) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
-        val loader = fxmlLoader.get()
-        loader.location = ResourceUrl(location)
-        // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
-        return LoadedParent(parent, controller)
+fun styleFor(kind: Int): String {
+    return when (TokenTypes.getCategory(kind)!!) {
+        WHITESPACE_NO_EOL, EOL, SEPARATOR, OPERATOR ->
+            "default-text"
+        COMMENT -> "comment"
+        IDENTIFIER -> "identifier"
+        KEYWORD -> "keyword"
+        LITERAL -> when (kind) {
+            STRING_LITERAL -> "string-literal"
+            else -> "other-literal"
+        }
     }
-
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
 }

@@ -23,31 +23,32 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.util
 
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.MainController
-import javax.inject.Inject
-import javax.inject.Provider
-import javax.inject.Singleton
+import java.util.TreeMap
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
-
-@Singleton
-class FxmlFiles @Inject constructor(
-    private val fxmlLoader: Provider<FXMLLoader>
+// to be inline-class'd later
+class LineOffsets(
+    private val offsets: IntArray
 ) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
-        val loader = fxmlLoader.get()
-        loader.location = ResourceUrl(location)
-        // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
-        return LoadedParent(parent, controller)
+    /**
+     * Compute index into original text, with 1-based lines and columns.
+     */
+    fun computeTextIndex(line: Int, column: Int): Int {
+        return offsets[(line - 1).coerceIn(0, offsets.lastIndex)] + (column - 1).coerceAtLeast(0)
     }
-
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
 }
+
+// Stores total offset at offsets[lineNumber - 1]
+// So, offsets[0] is always 0, offsets[1] is the length of the first line
+
+fun createLineOffsets(text: String): LineOffsets {
+    val offsets = TreeMap<Int, Int>()
+    text.lineSequence().forEachIndexed { i, line ->
+        offsets[i + 1] = offsets.getOrDefault(i, 0) + line.length + 1
+    }
+    return LineOffsets(
+        IntArray(offsets.lastKey() + 1) { k -> offsets[k] ?: 0 }
+    )
+}
+

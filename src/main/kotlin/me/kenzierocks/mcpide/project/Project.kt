@@ -70,6 +70,8 @@ class Project(
 
     // Non-IO functions, work with in-memory representation
 
+    val mappings: Map<String, SrgMapping> = srgMappings
+
     fun addMappings(mappings: Iterable<SrgMapping>, itemsForExport: Iterable<String> = setOf()) {
         mappings.associateByTo(srgMappings) { it.srgName }
         exportMappings.addAll(itemsForExport)
