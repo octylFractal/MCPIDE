@@ -229,7 +229,7 @@ class ModelProcessing @Inject constructor(
 
     private suspend fun saveProject() {
         requireProjectWorker().write {
-            save(force = true)
+            save()
         }
     }
 
