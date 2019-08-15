@@ -11,6 +11,10 @@
     -fx-background-color: -dark-bg-color;
 }
 
+#status-label {
+    -fx-text-fill: -dark-text-color;
+}
+
 .cell > .tree-disclosure-node > .arrow {
     -fx-background-color: -dark-text-color;
 }

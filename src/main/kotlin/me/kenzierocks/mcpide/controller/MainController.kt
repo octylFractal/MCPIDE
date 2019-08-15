@@ -71,6 +71,7 @@ import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
+import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
 import me.kenzierocks.mcpide.resolver.MavenAccess
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
@@ -96,7 +97,8 @@ class MainController @Inject constructor(
     @View
     private val viewScope: CoroutineScope,
     private val fxmlFiles: FxmlFiles,
-    private val resources: Resources
+    private val resources: Resources,
+    private val javaEditorAreaCreator: JavaEditorAreaCreator
 ) {
 
     companion object {
@@ -209,7 +211,7 @@ class MainController @Inject constructor(
     }
 
     private fun openFile(path: Path, content: String) {
-        val editor = JavaEditorArea(path)
+        val editor = javaEditorAreaCreator.create(path)
         editor.text = content
         val tab = Tab("${path.fileName}", VirtualizedScrollPane(editor))
         textView.tabs.add(tab)

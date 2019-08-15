@@ -55,7 +55,7 @@
       </SplitPane>
       <HBox alignment="CENTER_RIGHT" VBox.vgrow="NEVER">
          <children>
-            <Label fx:id="statusLabel" alignment="CENTER_RIGHT" textAlignment="RIGHT" HBox.hgrow="ALWAYS" />
+            <Label id="status-label" fx:id="statusLabel" alignment="CENTER_RIGHT" textAlignment="RIGHT" HBox.hgrow="ALWAYS" />
          </children>
          <VBox.margin>
             <Insets />

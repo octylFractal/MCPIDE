@@ -25,7 +25,9 @@
 
 package me.kenzierocks.mcpide.fx
 
+import com.github.javaparser.JavaToken
 import com.github.javaparser.StringProvider
+import com.github.javaparser.Token
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,13 +37,19 @@ import kotlinx.coroutines.channels.sendBlocking
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.comms.ModelComms
+import me.kenzierocks.mcpide.comms.StatusUpdate
+import me.kenzierocks.mcpide.util.LineOffsets
 import me.kenzierocks.mcpide.util.createLineOffsets
 import me.kenzierocks.mcpide.util.produceTokens
+import me.kenzierocks.mcpide.util.toExtendedString
+import mu.KotlinLogging
+import net.octyl.aptcreator.GenerateCreator
+import net.octyl.aptcreator.Provided
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.LineNumberFactory
 import org.fxmisc.richtext.model.PlainTextChange
@@ -50,7 +58,14 @@ import org.fxmisc.richtext.model.StyleSpans
 import org.fxmisc.richtext.model.StyleSpansBuilder
 import java.nio.file.Path
 
-class JavaEditorArea(var path: Path) : CodeArea() {
+@GenerateCreator
+class JavaEditorArea(
+    var path: Path,
+    @Provided
+    private val modelComms: ModelComms
+) : CodeArea() {
+    private val logger = KotlinLogging.logger { }
+
     init {
         isEditable = false
         paragraphGraphicFactory = LineNumberFactory.get(this)
@@ -59,10 +74,8 @@ class JavaEditorArea(var path: Path) : CodeArea() {
             .withDefaultEvent(listOf())
             .subscribe { it.forEach(flowChannel::sendBlocking) }
         flowChannel.invokeOnClose { sub.unsubscribe() }
-        // When no edits for 500ms, compute highlighting
-        // If new edits while highlighting, toss out highlight result
         val highlightFlow = flowChannel.consumeAsFlow()
-            .debounce(500)
+            // If new edits while highlighting, toss out highlight result
             .mapLatest { text to computeHighlighting(this.text) }
             .flowOn(Dispatchers.Default + CoroutineName("Highlighting"))
         CoroutineScope(Dispatchers.JavaFx + CoroutineName("HighlightApplication")).launch {
@@ -76,21 +89,46 @@ class JavaEditorArea(var path: Path) : CodeArea() {
     }
 
     private suspend fun computeHighlighting(text: String): StyleSpans<Collection<String>>? {
-        val offsets = createLineOffsets(text)
+        modelComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
+        try {
+            val offsets = createLineOffsets(text)
+            return provideHighlighting(text, offsets)
+        } finally {
+            modelComms.viewChannel.send(StatusUpdate("Highlighting", ""))
+        }
+    }
+
+    private suspend fun provideHighlighting(text: String, offsets: LineOffsets): StyleSpans<Collection<String>>? {
         return coroutineScope {
             val tokens = produceTokens(StringProvider(text))
 
             val builder = StyleSpansBuilder<Collection<String>>()
             var lastSpan = 0
+            var lastToken: Token? = null
             while (!tokens.isClosedForReceive) {
                 val token = tokens.receiveOrNull() ?: break
+                if (token.kind == JavaToken.Kind.GT.kind
+                    && lastToken?.kind == JavaToken.Kind.GT.kind
+                    && lastToken.image == ">>") {
+                    // JavaParser oddity. Ignore this token.
+                    continue
+                }
                 styleFor(token.kind).let { style ->
                     val start = offsets.computeTextIndex(token.beginLine, token.beginColumn)
                     val end = offsets.computeTextIndex(token.endLine, token.endColumn) + 1
+                    if (start < lastSpan) {
+                        // this is odd. discard this token.
+                        logger.info {
+                            "Discarding incorrectly positioned token: " +
+                                "${token.toExtendedString()}, last=${lastToken?.toExtendedString()}"
+                        }
+                        return@let
+                    }
                     builder.add(setOf("default-text"), start - lastSpan)
                     builder.add(setOf(style), end - start)
                     lastSpan = end
                 }
+                lastToken = token
             }
             builder.add(setOf("default-text"), text.length - lastSpan)
             builder.create()
@@ -99,7 +137,47 @@ class JavaEditorArea(var path: Path) : CodeArea() {
 
     fun setText(text: String) {
         replaceText(text)
-        setStyleSpans(0, StyleSpans.singleton(StyleSpan(setOf("default-text"), text.length)))
+        setStyleSpans(0, StyleSpans.singleton(StyleSpan(setOf("default-text"), length)))
+    }
+
+    override fun selectWord() {
+        val afterCaret = caretPosition
+        if (afterCaret !in (0 until length)) {
+            // Don't really know how to handle out-of-range.
+            // Let the superclass decide.
+            return super.selectWord()
+        }
+        val doc = text
+        if (doc[afterCaret].isJavaIdentifierPart()) {
+            val start = doc.iterIds(afterCaret, -1)
+            val end = doc.iterIds(afterCaret, 1) + 1
+            check(start < end) { "No selection made." }
+            caretSelectionBind.selectRange(start, end)
+            return
+        }
+        // try starting before the caret
+        val beforeCaret = afterCaret - 1
+        if (beforeCaret < 0) {
+            return super.selectWord()
+        }
+        val start = doc.iterIds(beforeCaret, -1)
+        // the caret is implicitly at the end, since we can't iterate forwards
+        if (start < afterCaret) {
+            caretSelectionBind.selectRange(start, afterCaret)
+            return
+        }
+        // Nothing found.
+        return super.selectWord()
+    }
+
+    private fun String.iterIds(index: Int, step: Int): Int {
+        var newIndex = index
+        var validIndex = index
+        while (newIndex in (0 until length) && this[newIndex].isJavaIdentifierPart()) {
+            validIndex = newIndex
+            newIndex += step
+        }
+        return validIndex
     }
 
 }

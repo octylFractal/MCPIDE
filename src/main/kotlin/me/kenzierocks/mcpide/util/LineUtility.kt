@@ -25,6 +25,8 @@
 
 package me.kenzierocks.mcpide.util
 
+import com.github.javaparser.JavaToken
+import com.github.javaparser.Token
 import java.util.TreeMap
 
 // to be inline-class'd later
@@ -52,3 +54,8 @@ fun createLineOffsets(text: String): LineOffsets {
     )
 }
 
+fun Token.toExtendedString(): String {
+    return "pos=$beginLine:$beginColumn->$endLine:$endColumn," +
+        "kind=${JavaToken.Kind.valueOf(kind)}," +
+        "image=$image"
+}
