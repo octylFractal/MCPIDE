@@ -25,24 +25,42 @@
 
 package me.kenzierocks.mcpide.util
 
-import com.github.javaparser.GeneratedJavaParserConstants
+import com.github.javaparser.GeneratedJavaParserConstants.EOF
+import com.github.javaparser.GeneratedJavaParserConstants.EXPORTS
+import com.github.javaparser.GeneratedJavaParserConstants.IDENTIFIER
+import com.github.javaparser.GeneratedJavaParserConstants.MODULE
+import com.github.javaparser.GeneratedJavaParserConstants.OPEN
+import com.github.javaparser.GeneratedJavaParserConstants.OPENS
+import com.github.javaparser.GeneratedJavaParserConstants.PROVIDES
+import com.github.javaparser.GeneratedJavaParserConstants.REQUIRES
+import com.github.javaparser.GeneratedJavaParserConstants.TO
+import com.github.javaparser.GeneratedJavaParserConstants.TRANSITIVE
+import com.github.javaparser.GeneratedJavaParserConstants.USES
+import com.github.javaparser.GeneratedJavaParserConstants.WITH
 import com.github.javaparser.GeneratedJavaParserTokenManager
 import com.github.javaparser.Provider
 import com.github.javaparser.SimpleCharStream
-import com.github.javaparser.StringProvider
 import com.github.javaparser.Token
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
 
-fun CoroutineScope.produceTokens(provider: Provider) : ReceiveChannel<Token> {
+private val MODULE_TOKEN_KINDS = setOf(
+    OPEN, MODULE, REQUIRES, TRANSITIVE, EXPORTS, OPENS, TO, USES, PROVIDES, WITH
+)
+
+fun CoroutineScope.produceTokens(provider: Provider): ReceiveChannel<Token> {
     return produce<Token>(Dispatchers.IO) {
         val tkmg = GeneratedJavaParserTokenManager(SimpleCharStream(provider))
         while (true) {
             val tk = tkmg.nextToken
-            if (tk.kind == GeneratedJavaParserConstants.EOF) {
+            if (tk.kind == EOF) {
                 break
+            }
+            // Module file tokens that we want as IDENTIFIER
+            if (tk.kind in MODULE_TOKEN_KINDS) {
+                tk.kind = IDENTIFIER
             }
             channel.send(tk)
         }

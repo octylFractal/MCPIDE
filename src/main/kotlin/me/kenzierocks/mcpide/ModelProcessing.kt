@@ -34,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapMerge
@@ -41,7 +42,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.toCollection
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
@@ -53,6 +53,8 @@ import me.kenzierocks.mcpide.comms.ModelComms
 import me.kenzierocks.mcpide.comms.OpenContent
 import me.kenzierocks.mcpide.comms.OpenFile
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.Rename
+import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
@@ -68,6 +70,7 @@ import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.produceTokens
 import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
+import okhttp3.internal.toImmutableMap
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
@@ -106,6 +109,12 @@ class ModelProcessing @Inject constructor(
                         is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)
                         is SetInitialMappings -> initMappings(msg.srgMappingsZip)
                         is OpenFile -> openFile(msg.file)
+                        is Rename -> rename(msg.file, msg.old, msg.new)
+                        is RetrieveMappings -> runCatching {
+                            requireProjectWorker().read {
+                                mappingStorage.toImmutableMap()
+                            }
+                        }.fold(msg.result::complete, msg.result::completeExceptionally)
                     })
                 } catch (e: Exception) {
                     logger.warn(e) { "Error in worker loop" }
@@ -148,11 +157,12 @@ class ModelProcessing @Inject constructor(
     private suspend fun initMappings(srgMappingsZip: Path) {
         val result = flowOf("fields.csv", "methods.csv", "params.csv")
             .flatMapMerge { readSrgZipEntry(srgMappingsZip, it) }
-            .toList()
 
         val p = requireProjectWorker()
         p.write {
-            addMappings(result)
+            result.collect {
+                addMapping(it)
+            }
         }
         p.write { save() }
     }
@@ -190,31 +200,17 @@ class ModelProcessing @Inject constructor(
         }
     }
 
+    private suspend fun rename(path: Path, old: String, new: String) {
+        requireProjectWorker().write(suspendFor = true) { addNewMapping(old, new) }
+        openFile(path)
+    }
+
     private fun exportMappings() {
 
     }
 
     private suspend fun openFile(file: Path) {
-        val mappings = requireProjectWorker().read { mappings }
         val text = withContext(Dispatchers.IO) { Files.readString(file) }
-        val offsets = createLineOffsets(text)
-        val builder = StringBuilder(text)
-        coroutineScope {
-            val tokens = produceTokens(StringProvider(text)).consumeAsFlow()
-                .filter { t ->
-                    t.kind == GeneratedJavaParserConstants.IDENTIFIER && t.image in mappings
-                }
-                .toCollection(mutableListOf())
-            tokens.reverse()
-            tokens.forEach { t ->
-                val newName = mappings.getValue(t.image).newName
-                builder.replace(
-                    offsets.computeTextIndex(t.beginLine, t.beginColumn),
-                    offsets.computeTextIndex(t.endLine, t.endColumn) + 1,
-                    newName
-                )
-            }
-        }
-        sendMessage(OpenContent(file, builder.toString()))
+        sendMessage(OpenContent(file, text))
     }
 }

@@ -25,7 +25,12 @@
 
 package me.kenzierocks.mcpide.comms
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.SendChannel
+import me.kenzierocks.mcpide.SrgMapping
 import java.nio.file.Path
+import kotlin.coroutines.coroutineContext
 
 sealed class ModelMessage
 
@@ -38,3 +43,16 @@ object ExportMappings : ModelMessage()
 data class DecompileMinecraft(val mcpConfigZip: Path) : ModelMessage()
 
 data class SetInitialMappings(val srgMappingsZip: Path) : ModelMessage()
+
+data class Rename(val file: Path, val old: String, val new: String) : ModelMessage()
+
+class RetrieveMappings(parent: Job? = null) : ModelMessage() {
+    val result = CompletableDeferred<Map<String, SrgMapping>>(parent = parent)
+}
+
+suspend fun SendChannel<ModelMessage>.retrieveMappings(): Map<String, SrgMapping> {
+    return RetrieveMappings(coroutineContext[Job]).let { msg ->
+        send(msg)
+        msg.result.await()
+    }
+}

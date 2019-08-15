@@ -42,9 +42,14 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.runBlocking
-import me.kenzierocks.mcpide.comms.comms
+import me.kenzierocks.mcpide.comms.ModelComms
+import me.kenzierocks.mcpide.comms.ModelMessage
+import me.kenzierocks.mcpide.comms.PublishComms
+import me.kenzierocks.mcpide.comms.ViewComms
+import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
@@ -70,13 +75,18 @@ object CoroutineSupportModule {
 
 @Module
 object CommsModule {
-    private val commsInstance = comms()
+
+    private val modelChannel = Channel<ModelMessage>(100)
+    private val viewChannel = Channel<ViewMessage>(100)
 
     @[Provides Singleton]
-    fun provideViewComms() = commsInstance.first
+    fun provideViewComms() = ViewComms(modelChannel, viewChannel)
 
     @[Provides Singleton]
-    fun provideModelComms() = commsInstance.second
+    fun provideModelComms() = ModelComms(modelChannel, viewChannel)
+
+    @[Provides Singleton]
+    fun providePublishComms() = PublishComms(modelChannel, viewChannel)
 }
 
 @Module

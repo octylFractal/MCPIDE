@@ -68,3 +68,10 @@ fun String.detectSrgType(): SrgType? {
     val type = SRG_TYPE_REGEX.find(this) ?: return null
     return SRG_TYPE_MAP.getValue(type.groupValues[1])
 }
+
+/**
+ * Matches valid SRG names.
+ */
+val SRG_REGEX = Regex(
+    "(func|field)_\\d+_[a-zA-Z]+_?|p_i?\\d+_\\d+_"
+)

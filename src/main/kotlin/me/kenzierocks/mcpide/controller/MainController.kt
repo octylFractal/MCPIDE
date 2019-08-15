@@ -36,6 +36,7 @@ import javafx.scene.control.Dialog
 import javafx.scene.control.Label
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
+import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
 import javafx.scene.control.TreeCell
@@ -210,12 +211,26 @@ class MainController @Inject constructor(
         return currentParentNode
     }
 
-    private fun openFile(path: Path, content: String) {
+    private suspend fun openFile(path: Path, content: String) {
+        val title = path.fileName.toString()
+        val existing = textView.tabs.firstOrNull { it.text == title }
+        if (existing != null && openInExisting(existing, content)) {
+            return
+        }
         val editor = javaEditorAreaCreator.create(path)
-        editor.text = content
-        val tab = Tab("${path.fileName}", VirtualizedScrollPane(editor))
+        editor.replaceText("Loading...")
+        editor.updateText(content)
+        val tab = Tab(title, VirtualizedScrollPane(editor,
+            ScrollPane.ScrollBarPolicy.ALWAYS, ScrollPane.ScrollBarPolicy.ALWAYS))
         textView.tabs.add(tab)
         textView.selectionModel.select(tab)
+    }
+
+    private suspend fun openInExisting(existing: Tab, content: String) : Boolean {
+        val editor = existing.editorArea ?: return false
+        editor.updateText(content)
+        textView.selectionModel.select(existing)
+        return true
     }
 
     private fun updateStatus(msg: StatusUpdate) {
@@ -335,11 +350,24 @@ class MainController @Inject constructor(
         about.show()
     }
 
+    @FXML
+    fun startRename() {
+        val currentArea = (textView.selectionModel.selectedItem?.editorArea)
+            ?: return
+        viewScope.launch {
+            currentArea.startRename()
+        }
+    }
+
     private fun rewriteMenusForMacOs() {
         // macOS gets funky menus!
         menuBar.isUseSystemMenuBar = true
         quitMenuItem.isVisible = false
     }
+
+    @Suppress("UsePropertyAccessSyntax")
+    private val Tab.editorArea: JavaEditorArea?
+            get() = (content as? VirtualizedScrollPane<*>)?.getContent() as? JavaEditorArea
 }
 
 class PathCell(

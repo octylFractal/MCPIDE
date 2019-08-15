@@ -25,149 +25,150 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.github.javaparser.JavaToken
-import com.github.javaparser.StringProvider
-import com.github.javaparser.Token
+import javafx.scene.control.Alert
+import javafx.scene.control.ButtonType
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.receiveOrNull
-import kotlinx.coroutines.channels.sendBlocking
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.comms.ModelComms
+import me.kenzierocks.mcpide.comms.PublishComms
+import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.StatusUpdate
-import me.kenzierocks.mcpide.util.LineOffsets
-import me.kenzierocks.mcpide.util.createLineOffsets
-import me.kenzierocks.mcpide.util.produceTokens
-import me.kenzierocks.mcpide.util.toExtendedString
+import me.kenzierocks.mcpide.comms.retrieveMappings
+import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.setPrefSizeFromContent
+import me.kenzierocks.mcpide.util.showAndSuspend
+import me.kenzierocks.mcpide.util.suspendUntilEqual
 import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
-import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.LineNumberFactory
-import org.fxmisc.richtext.model.PlainTextChange
-import org.fxmisc.richtext.model.StyleSpan
-import org.fxmisc.richtext.model.StyleSpans
-import org.fxmisc.richtext.model.StyleSpansBuilder
 import java.nio.file.Path
 
 @GenerateCreator
 class JavaEditorArea(
     var path: Path,
     @Provided
-    private val modelComms: ModelComms
-) : CodeArea() {
+    private val publishComms: PublishComms
+) : MappingTextArea() {
     private val logger = KotlinLogging.logger { }
+    private val updatesChannel = Channel<String>(Channel.BUFFERED)
 
     init {
         isEditable = false
         paragraphGraphicFactory = LineNumberFactory.get(this)
-        val flowChannel = Channel<PlainTextChange>(1)
-        val sub = multiPlainChanges()
-            .withDefaultEvent(listOf())
-            .subscribe { it.forEach(flowChannel::sendBlocking) }
-        flowChannel.invokeOnClose { sub.unsubscribe() }
-        val highlightFlow = flowChannel.consumeAsFlow()
+        val highlightFlow = updatesChannel.consumeAsFlow()
             // If new edits while highlighting, toss out highlight result
-            .mapLatest { text to computeHighlighting(this.text) }
+            .mapLatest {
+                try {
+                    computeHighlighting(it)
+                } catch (e: Exception) {
+                    logger.warn(e) { "Highlighting error" }
+                    e.openErrorDialog(
+                        title = "Highlighting Error",
+                        header = "An error occurred while computing highlighting"
+                    )
+                    null
+                }
+            }
             .flowOn(Dispatchers.Default + CoroutineName("Highlighting"))
         CoroutineScope(Dispatchers.JavaFx + CoroutineName("HighlightApplication")).launch {
-            highlightFlow.collect { (text, spans) ->
+            highlightFlow.collect { highlighting ->
                 // Verify spans are valid, then apply.
-                if (spans != null && this@JavaEditorArea.text == text) {
-                    setStyleSpans(0, spans)
+                if (highlighting != null) {
+                    this@JavaEditorArea.replaceText(highlighting.newText)
+                    setStyleSpans(0, highlighting.spans)
                 }
             }
         }
     }
 
-    private suspend fun computeHighlighting(text: String): StyleSpans<Collection<String>>? {
-        modelComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
+    private suspend fun computeHighlighting(text: String): Highlighting? {
+        publishComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
         try {
-            val offsets = createLineOffsets(text)
-            return provideHighlighting(text, offsets)
+            val mappings = publishComms.modelChannel.retrieveMappings()
+            return provideHighlighting(text, mappings)
         } finally {
-            modelComms.viewChannel.send(StatusUpdate("Highlighting", ""))
+            publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
         }
     }
 
-    private suspend fun provideHighlighting(text: String, offsets: LineOffsets): StyleSpans<Collection<String>>? {
-        return coroutineScope {
-            val tokens = produceTokens(StringProvider(text))
-
-            val builder = StyleSpansBuilder<Collection<String>>()
-            var lastSpan = 0
-            var lastToken: Token? = null
-            while (!tokens.isClosedForReceive) {
-                val token = tokens.receiveOrNull() ?: break
-                if (token.kind == JavaToken.Kind.GT.kind
-                    && lastToken?.kind == JavaToken.Kind.GT.kind
-                    && lastToken.image == ">>") {
-                    // JavaParser oddity. Ignore this token.
-                    continue
-                }
-                styleFor(token.kind).let { style ->
-                    val start = offsets.computeTextIndex(token.beginLine, token.beginColumn)
-                    val end = offsets.computeTextIndex(token.endLine, token.endColumn) + 1
-                    if (start < lastSpan) {
-                        // this is odd. discard this token.
-                        logger.info {
-                            "Discarding incorrectly positioned token: " +
-                                "${token.toExtendedString()}, last=${lastToken?.toExtendedString()}"
-                        }
-                        return@let
-                    }
-                    builder.add(setOf("default-text"), start - lastSpan)
-                    builder.add(setOf(style), end - start)
-                    lastSpan = end
-                }
-                lastToken = token
-            }
-            builder.add(setOf("default-text"), text.length - lastSpan)
-            builder.create()
-        }
+    suspend fun updateText(text: String) {
+        updatesChannel.send(text)
     }
 
-    fun setText(text: String) {
-        replaceText(text)
-        setStyleSpans(0, StyleSpans.singleton(StyleSpan(setOf("default-text"), length)))
+    suspend fun startRename() {
+        val sel = trySpecialSelectWord() ?: return
+        caretSelectionBind.selectRange(sel.first, sel.last)
+        val srgName = getStyleSpans(sel.first, sel.last)
+            .single().style.srgName ?: return
+        val renameDialog = RenameDialog.create()
+        val selBounds = selectionBounds.orElse(null) ?: throw IllegalStateException("Expected bounds")
+        renameDialog.popup.show(this, selBounds.minX, selBounds.maxY)
+        renameDialog.textField.requestFocus()
+        renameDialog.popup.showingProperty().suspendUntilEqual(false)
+        val text = renameDialog.textField.text
+        if (text.isEmpty() || !text.all { it.isJavaIdentifierPart() } || !text[0].isJavaIdentifierStart()) {
+            return
+        }
+        val mappings = publishComms.modelChannel.retrieveMappings()
+        if (srgName in mappings && !askProceedRename()) {
+            return
+        }
+        publishComms.modelChannel.send(Rename(path, srgName, text))
+    }
+
+    private suspend fun askProceedRename(): Boolean {
+        val d = Alert(Alert.AlertType.CONFIRMATION)
+        d.title = "Overwrite Confirmation"
+        d.contentText = "Are you sure you want to overwrite an existing mapping?"
+        d.isResizable = true
+        d.dialogPane.setPrefSizeFromContent()
+        return when (d.showAndSuspend()) {
+            null, ButtonType.CANCEL -> false
+            else -> true
+        }
     }
 
     override fun selectWord() {
+        when (val sel = trySpecialSelectWord()) {
+            null -> super.selectWord()
+            else -> caretSelectionBind.selectRange(sel.first, sel.last)
+        }
+    }
+
+    private fun trySpecialSelectWord(): IntRange? {
         val afterCaret = caretPosition
         if (afterCaret !in (0 until length)) {
             // Don't really know how to handle out-of-range.
             // Let the superclass decide.
-            return super.selectWord()
+            return null
         }
         val doc = text
         if (doc[afterCaret].isJavaIdentifierPart()) {
             val start = doc.iterIds(afterCaret, -1)
             val end = doc.iterIds(afterCaret, 1) + 1
             check(start < end) { "No selection made." }
-            caretSelectionBind.selectRange(start, end)
-            return
+            return start..end
         }
         // try starting before the caret
         val beforeCaret = afterCaret - 1
         if (beforeCaret < 0) {
-            return super.selectWord()
+            return null
         }
         val start = doc.iterIds(beforeCaret, -1)
         // the caret is implicitly at the end, since we can't iterate forwards
         if (start < afterCaret) {
-            caretSelectionBind.selectRange(start, afterCaret)
-            return
+            return start..afterCaret
         }
         // Nothing found.
-        return super.selectWord()
+        return null
     }
 
     private fun String.iterIds(index: Int, step: Int): Int {

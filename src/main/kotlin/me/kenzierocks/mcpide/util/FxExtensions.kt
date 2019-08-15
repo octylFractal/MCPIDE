@@ -26,7 +26,8 @@
 package me.kenzierocks.mcpide.util
 
 import com.google.common.base.Throwables
-import javafx.beans.value.ChangeListener
+import javafx.beans.InvalidationListener
+import javafx.beans.Observable
 import javafx.beans.value.ObservableValue
 import javafx.event.EventHandler
 import javafx.scene.control.Alert
@@ -35,7 +36,6 @@ import javafx.scene.control.DialogPane
 import javafx.scene.control.TextArea
 import javafx.scene.layout.Border
 import javafx.scene.layout.Region
-import javafx.scene.shape.SVGPath
 import javafx.scene.text.Font
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -44,7 +44,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.URL
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -67,11 +66,24 @@ fun DialogPane.setPrefSizeFromContent() {
  */
 suspend fun <R> Dialog<R>.showAndSuspend(): R? {
     show()
-    return suspendCoroutine { cont ->
-        resultProperty().addListener(object : ChangeListener<R> {
-            override fun changed(observable: ObservableValue<out R>?, oldValue: R, newValue: R) {
-                cont.resume(newValue)
-                resultProperty().removeListener(this)
+    showingProperty().suspendUntilEqual(false)
+    return result
+}
+
+/**
+ * Suspend until the given property is [Any.equals] to the given value.
+ */
+suspend fun <T> ObservableValue<T>.suspendUntilEqual(value: T?) {
+    if (this.value == value) {
+        return
+    }
+    suspendCoroutine<Unit> { cont ->
+        addListener(object : InvalidationListener {
+            override fun invalidated(observable: Observable) {
+                if (this@suspendUntilEqual.value == value) {
+                    cont.resume(Unit)
+                    removeListener(this)
+                }
             }
         })
     }

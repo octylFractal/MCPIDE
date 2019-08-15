@@ -27,6 +27,7 @@ package me.kenzierocks.mcpide.project
 
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
+import me.kenzierocks.mcpide.Side
 import me.kenzierocks.mcpide.Srg
 import me.kenzierocks.mcpide.SrgMapping
 import net.octyl.aptcreator.GenerateCreator
@@ -64,18 +65,28 @@ class Project(
     private val srgMappingsFile: Path = directory.resolve("srg-mappings.csv.gz")
     private val exportsFile: Path = directory.resolve("srg-exports.csv.gz")
     val minecraftJar: Path = directory.resolve("minecraft.jar")
-    private val srgMappings = mutableMapOf<String, SrgMapping>()
+    private val srgMappingStorage = mutableMapOf<String, SrgMapping>()
     private val exportMappings = mutableSetOf<String>()
     var dirty = false
 
     // Non-IO functions, work with in-memory representation
 
-    val mappings: Map<String, SrgMapping> = srgMappings
+    val mappingStorage: Map<String, SrgMapping> = srgMappingStorage
 
-    fun addMappings(mappings: Iterable<SrgMapping>, itemsForExport: Iterable<String> = setOf()) {
-        mappings.associateByTo(srgMappings) { it.srgName }
-        exportMappings.addAll(itemsForExport)
+    fun addMapping(newMapping: SrgMapping, forExport: Boolean = false) {
+        srgMappingStorage[newMapping.srgName] = newMapping
+        if (forExport) {
+            exportMappings.add(newMapping.srgName)
+        }
         dirty = true
+    }
+
+    fun addNewMapping(srgName: String, newName: String) {
+        val newMapping = srgMappingStorage[srgName]?.copy(
+            srgName = srgName,
+            newName = newName
+        ) ?: SrgMapping(srgName, newName, Side.JOINED)
+        addMapping(newMapping, forExport = true)
     }
 
     // IO, save/load functions, work with files
@@ -106,10 +117,10 @@ class Project(
     }
 
     private fun loadMappings() {
-        readSrgMappings(srgMappingsFile).associateByTo(srgMappings) { it.srgName }
+        readSrgMappings(srgMappingsFile).associateByTo(srgMappingStorage) { it.srgName }
         readSrgMappings(exportsFile)
             .map { it.srgName }
-            .filterTo(exportMappings) { it in srgMappings }
+            .filterTo(exportMappings) { it in srgMappingStorage }
     }
 
     private inline fun gzReader(path: Path, block: (Reader) -> Unit) {
@@ -133,10 +144,10 @@ class Project(
     }
 
     private fun saveMappings() {
-        gzWriter(srgMappingsFile) { it.writeMappings(srgMappings.values.asSequence()) }
+        gzWriter(srgMappingsFile) { it.writeMappings(srgMappingStorage.values.asSequence()) }
         gzWriter(exportsFile) {
             it.writeMappings(exportMappings.asSequence().map { k ->
-                srgMappings.getValue(k)
+                srgMappingStorage.getValue(k)
             })
         }
     }

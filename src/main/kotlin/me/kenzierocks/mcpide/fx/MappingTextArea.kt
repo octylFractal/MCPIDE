@@ -25,28 +25,33 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.github.javaparser.GeneratedJavaParserConstants
-import com.github.javaparser.GeneratedJavaParserConstants.STRING_LITERAL
-import com.github.javaparser.JavaToken.Category.COMMENT
-import com.github.javaparser.JavaToken.Category.EOL
-import com.github.javaparser.JavaToken.Category.IDENTIFIER
-import com.github.javaparser.JavaToken.Category.KEYWORD
-import com.github.javaparser.JavaToken.Category.LITERAL
-import com.github.javaparser.JavaToken.Category.OPERATOR
-import com.github.javaparser.JavaToken.Category.SEPARATOR
-import com.github.javaparser.JavaToken.Category.WHITESPACE_NO_EOL
-import com.github.javaparser.TokenTypes
+import org.fxmisc.richtext.CodeArea
+import org.fxmisc.richtext.StyledTextArea
 
-fun styleFor(kind: Int): String {
-    return when (TokenTypes.getCategory(kind)!!) {
-        WHITESPACE_NO_EOL, EOL, SEPARATOR, OPERATOR ->
-            "default-text"
-        COMMENT -> "comment"
-        IDENTIFIER -> "identifier"
-        KEYWORD -> "keyword"
-        LITERAL -> when (kind) {
-            STRING_LITERAL -> "string-literal"
-            else -> "other-literal"
-        }
+/**
+ * TextArea with SRG mappings backing some sections of text.
+ *
+ * Based on [CodeArea].
+ */
+open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
+    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
+    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
+    false
+) {
+    init {
+        styleClass.add("code-area")
+
+        // load the default style that defines a fixed-width font
+        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
+
+        // don't apply preceding style to typed text
+        useInitialStyleForInsertion = true
     }
 }
+
+val DEFAULT_MAP_STYLE = MapStyle(setOf("default-text"), null)
+
+data class MapStyle(
+    val styleClasses: Collection<String>,
+    val srgName: String? = null
+)
