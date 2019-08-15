@@ -28,34 +28,49 @@ package me.kenzierocks.mcpide.controller
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import javafx.application.Platform
 import javafx.beans.InvalidationListener
+import javafx.beans.binding.Bindings
 import javafx.beans.property.ReadOnlyProperty
+import javafx.collections.FXCollections
 import javafx.fxml.FXML
+import javafx.scene.Scene
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.Label
+import javafx.scene.control.ListView
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
+import javafx.scene.control.TableColumn
+import javafx.scene.control.TableView
 import javafx.scene.control.TreeCell
 import javafx.scene.control.TreeItem
 import javafx.scene.control.TreeView
+import javafx.scene.control.cell.PropertyValueFactory
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
+import javafx.scene.input.KeyCode
+import javafx.scene.input.MouseButton
+import javafx.scene.layout.VBox
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
+import javafx.stage.Stage
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
 import me.kenzierocks.mcpide.Model
 import me.kenzierocks.mcpide.Resources
+import me.kenzierocks.mcpide.SrgMapping
 import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
@@ -63,13 +78,15 @@ import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
-import me.kenzierocks.mcpide.comms.OpenContent
-import me.kenzierocks.mcpide.comms.OpenFile
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.RefreshOpenFiles
+import me.kenzierocks.mcpide.comms.RemoveRenames
+import me.kenzierocks.mcpide.comms.SaveProject
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
+import me.kenzierocks.mcpide.comms.retrieveMappingInfo
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
@@ -78,6 +95,12 @@ import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
+import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
+import org.fxmisc.wellbehaved.event.EventPattern.mouseClicked
+import org.fxmisc.wellbehaved.event.InputHandler
+import org.fxmisc.wellbehaved.event.InputMap.consume
+import org.fxmisc.wellbehaved.event.InputMap.process
+import org.fxmisc.wellbehaved.event.Nodes
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -128,7 +151,6 @@ class MainController @Inject constructor(
     fun startEventLoop() {
         viewScope.launch {
             sendMessage(LoadProject(Paths.get("/home/octy/Documents/mcp_reversing")))
-            sendMessage(OpenFile(Paths.get("./logs/Test.java")))
             while (!viewComms.viewChannel.isClosedForReceive) {
                 val msg = viewComms.viewChannel.receive()
                 handleMessage(msg)
@@ -144,12 +166,18 @@ class MainController @Inject constructor(
                 resources.fileIcon,
                 resources.folderIcon,
                 resources.folderOpenIcon
-            ).also {
-                it.setOnMouseClicked { e ->
-                    if (e.clickCount == 2 && isValidPath(it.item)) {
-                        sendMessage(OpenFile(it.item))
+            ).also { cell ->
+                Nodes.addInputMap(cell, process(mouseClicked(MouseButton.PRIMARY)) { e ->
+                    when {
+                        e.clickCount == 2 && isValidPath(cell.item) -> {
+                            viewScope.launch {
+                                openFile(cell.item)
+                            }
+                            InputHandler.Result.CONSUME
+                        }
+                        else -> InputHandler.Result.IGNORE
                     }
-                }
+                })
             }
         }
 
@@ -169,10 +197,10 @@ class MainController @Inject constructor(
                 fileTree.root = TreeItem(Paths.get("Loading project files..."))
                 fileTree.root = dirTree.await()
             }
-            is OpenContent -> openFile(viewMessage.source, viewMessage.content)
             is AskDecompileSetup -> askDecompileSetup()
             is AskInitialMappings -> askInitialMappings()
             is StatusUpdate -> updateStatus(viewMessage)
+            is RefreshOpenFiles -> refreshOpenFiles()
         })
     }
 
@@ -211,8 +239,9 @@ class MainController @Inject constructor(
         return currentParentNode
     }
 
-    private suspend fun openFile(path: Path, content: String) {
+    private suspend fun openFile(path: Path) {
         val title = path.fileName.toString()
+        val content = withContext(Dispatchers.IO) { Files.readString(path) }
         val existing = textView.tabs.firstOrNull { it.text == title }
         if (existing != null && openInExisting(existing, content)) {
             return
@@ -226,11 +255,20 @@ class MainController @Inject constructor(
         textView.selectionModel.select(tab)
     }
 
-    private suspend fun openInExisting(existing: Tab, content: String) : Boolean {
+    private suspend fun openInExisting(existing: Tab, content: String): Boolean {
         val editor = existing.editorArea ?: return false
         editor.updateText(content)
         textView.selectionModel.select(existing)
         return true
+    }
+
+    private suspend fun refreshOpenFiles() {
+        coroutineScope {
+            textView.tabs.mapNotNull { it.editorArea }
+                .map { async(context = Dispatchers.IO) { it to Files.readString(it.path) } }
+                .map { it.await() }
+                .forEach { (e, c) -> e.updateText(c) }
+        }
     }
 
     private fun updateStatus(msg: StatusUpdate) {
@@ -337,6 +375,72 @@ class MainController @Inject constructor(
     }
 
     @FXML
+    fun save() {
+        sendMessage(SaveProject)
+    }
+
+    @FXML
+    fun openExportableMappings() {
+        viewScope.launch {
+            val (_, exported) = viewComms.modelChannel.retrieveMappingInfo()
+            val table = TableView<SrgMapping>()
+            withContext(Dispatchers.Default) {
+                table.items.setAll(exported.values)
+                table.columns.setAll(
+                    TableColumn<SrgMapping, String>("SRG Name").apply {
+                        setCellValueFactory(PropertyValueFactory("srgName"))
+                    },
+                    TableColumn<SrgMapping, String>("New Name").apply {
+                        setCellValueFactory(PropertyValueFactory("newName"))
+                    },
+                    TableColumn<SrgMapping, String>("Description").apply {
+                        setCellValueFactory(PropertyValueFactory("desc"))
+                    }
+                )
+                // Size the table in equal parts.
+                table.columns.forEach { col ->
+                    col.prefWidthProperty().bind(
+                        Bindings.divide(table.widthProperty(), table.columns.size)
+                    )
+                }
+                table.columnResizePolicy = TableView.CONSTRAINED_RESIZE_POLICY
+                // Allow deleting rows
+                Nodes.addInputMap(table, consume(keyPressed(KeyCode.DELETE)) {
+                    viewScope.launch {
+                        val toDelete = table.selectionModel.selectedItems.toList()
+                        if (toDelete.isNotEmpty() && confirmNameDelete(toDelete)) {
+                            table.items.removeAll(toDelete)
+                            sendMessage(RemoveRenames(
+                                toDelete.map { it.srgName }.toSet()
+                            ))
+                        }
+                    }
+                })
+            }
+            val stage = Stage()
+            stage.title = "Exportable Mappings"
+            stage.scene = Scene(
+                VBox(table), 640.0, 360.0
+            )
+            stage.sizeToScene()
+            stage.show()
+        }
+    }
+
+    private suspend fun confirmNameDelete(toDelete: List<SrgMapping>): Boolean {
+        val confirm = Alert(Alert.AlertType.CONFIRMATION)
+        confirm.title = "Confirm Name Deletion"
+        confirm.headerText = "Are you sure you want to delete these names?"
+        confirm.dialogPane.content = ListView(FXCollections.observableList(
+            toDelete.map { "${it.srgName}->${it.newName}" }
+        ))
+        return when (confirm.showAndSuspend()) {
+            null, ButtonType.CANCEL -> false
+            else -> true
+        }
+    }
+
+    @FXML
     fun quit() {
         Platform.exit()
     }
@@ -367,7 +471,7 @@ class MainController @Inject constructor(
 
     @Suppress("UsePropertyAccessSyntax")
     private val Tab.editorArea: JavaEditorArea?
-            get() = (content as? VirtualizedScrollPane<*>)?.getContent() as? JavaEditorArea
+        get() = (content as? VirtualizedScrollPane<*>)?.getContent() as? JavaEditorArea
 }
 
 class PathCell(

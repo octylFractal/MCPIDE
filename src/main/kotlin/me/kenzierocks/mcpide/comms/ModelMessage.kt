@@ -36,22 +36,29 @@ sealed class ModelMessage
 
 data class LoadProject(val projectDirectory: Path) : ModelMessage()
 
-data class OpenFile(val file: Path) : ModelMessage()
-
 object ExportMappings : ModelMessage()
+
+object SaveProject : ModelMessage()
 
 data class DecompileMinecraft(val mcpConfigZip: Path) : ModelMessage()
 
 data class SetInitialMappings(val srgMappingsZip: Path) : ModelMessage()
 
-data class Rename(val file: Path, val old: String, val new: String) : ModelMessage()
+data class Rename(val old: String, val new: String) : ModelMessage()
+
+data class RemoveRenames(val srgNames: Set<String>) : ModelMessage()
+
+data class MappingInfo(
+    val mappings: Map<String, SrgMapping>,
+    val exported: Map<String, SrgMapping>
+)
 
 class RetrieveMappings(parent: Job? = null) : ModelMessage() {
-    val result = CompletableDeferred<Map<String, SrgMapping>>(parent = parent)
+    val result = CompletableDeferred<MappingInfo>(parent = parent)
 }
 
-suspend fun SendChannel<ModelMessage>.retrieveMappings(): Map<String, SrgMapping> {
-    return RetrieveMappings(coroutineContext[Job]).let { msg ->
+suspend fun SendChannel<ModelMessage>.retrieveMappingInfo(): MappingInfo {
+    return RetrieveMappings(parent = coroutineContext[Job]).let { msg ->
         send(msg)
         msg.result.await()
     }

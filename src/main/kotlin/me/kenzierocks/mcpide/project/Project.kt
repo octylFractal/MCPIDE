@@ -30,6 +30,7 @@ import com.fasterxml.jackson.databind.ObjectWriter
 import me.kenzierocks.mcpide.Side
 import me.kenzierocks.mcpide.Srg
 import me.kenzierocks.mcpide.SrgMapping
+import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
 import java.io.InputStreamReader
@@ -55,6 +56,7 @@ class Project(
     @[Provided Srg]
     private val srgWriter: ObjectWriter
 ) : AutoCloseable {
+    private val logger = KotlinLogging.logger { }
     // Acquire project lock first.
     private val projectLock = projectLock(directory).also { it.acquire() }
 
@@ -65,28 +67,30 @@ class Project(
     private val srgMappingsFile: Path = directory.resolve("srg-mappings.csv.gz")
     private val exportsFile: Path = directory.resolve("srg-exports.csv.gz")
     val minecraftJar: Path = directory.resolve("minecraft.jar")
-    private val srgMappingStorage = mutableMapOf<String, SrgMapping>()
-    private val exportMappings = mutableSetOf<String>()
+    val initialMappings = LinkedHashMap<String, SrgMapping>()
+    val exportedMappings = LinkedHashMap<String, SrgMapping>()
     var dirty = false
 
     // Non-IO functions, work with in-memory representation
 
-    val mappingStorage: Map<String, SrgMapping> = srgMappingStorage
-
     fun addMapping(newMapping: SrgMapping, forExport: Boolean = false) {
-        srgMappingStorage[newMapping.srgName] = newMapping
-        if (forExport) {
-            exportMappings.add(newMapping.srgName)
-        }
+        (when {
+            forExport -> exportedMappings
+            else -> initialMappings
+        })[newMapping.srgName] = newMapping
         dirty = true
     }
 
     fun addNewMapping(srgName: String, newName: String) {
-        val newMapping = srgMappingStorage[srgName]?.copy(
+        val newMapping = initialMappings[srgName]?.copy(
             srgName = srgName,
             newName = newName
         ) ?: SrgMapping(srgName, newName, Side.JOINED)
         addMapping(newMapping, forExport = true)
+    }
+
+    fun removeMappings(srgNames: Set<String>) {
+        exportedMappings.keys.removeAll(srgNames)
     }
 
     // IO, save/load functions, work with files
@@ -117,10 +121,10 @@ class Project(
     }
 
     private fun loadMappings() {
-        readSrgMappings(srgMappingsFile).associateByTo(srgMappingStorage) { it.srgName }
-        readSrgMappings(exportsFile)
-            .map { it.srgName }
-            .filterTo(exportMappings) { it in srgMappingStorage }
+        readSrgMappings(srgMappingsFile).associateByTo(initialMappings) { it.srgName }
+        logger.info { "Loaded mappings from $srgMappingsFile (count=${initialMappings.size})" }
+        readSrgMappings(exportsFile).associateByTo(exportedMappings) { it.srgName }
+        logger.info { "Loaded exports from $exportsFile (count=${exportedMappings.size})" }
     }
 
     private inline fun gzReader(path: Path, block: (Reader) -> Unit) {
@@ -144,12 +148,10 @@ class Project(
     }
 
     private fun saveMappings() {
-        gzWriter(srgMappingsFile) { it.writeMappings(srgMappingStorage.values.asSequence()) }
-        gzWriter(exportsFile) {
-            it.writeMappings(exportMappings.asSequence().map { k ->
-                srgMappingStorage.getValue(k)
-            })
-        }
+        gzWriter(srgMappingsFile) { it.writeMappings(initialMappings.values.asSequence()) }
+        logger.info { "Saved mappings to $srgMappingsFile (count=${initialMappings.size})" }
+        gzWriter(exportsFile) { it.writeMappings(exportedMappings.values.asSequence()) }
+        logger.info { "Saved mappings to $exportsFile (count=${exportedMappings.size})" }
     }
 
     private fun gzWriter(path: Path, block: (Writer) -> Unit) {
@@ -160,6 +162,8 @@ class Project(
     }
 
     private fun Writer.writeMappings(srgMapping: Sequence<SrgMapping>) {
+        // write header
+        append("srgName,newName,side,desc").append('\n')
         srgWriter.writeValues(this).use { seqWriter -> srgMapping.forEach { seqWriter.write(it) } }
     }
 

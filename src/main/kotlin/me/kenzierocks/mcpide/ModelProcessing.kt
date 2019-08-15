@@ -28,33 +28,28 @@ package me.kenzierocks.mcpide
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.github.javaparser.GeneratedJavaParserConstants
-import com.github.javaparser.StringProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.toCollection
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
+import me.kenzierocks.mcpide.comms.MappingInfo
 import me.kenzierocks.mcpide.comms.ModelComms
-import me.kenzierocks.mcpide.comms.OpenContent
-import me.kenzierocks.mcpide.comms.OpenFile
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.RefreshOpenFiles
+import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
+import me.kenzierocks.mcpide.comms.SaveProject
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
@@ -65,12 +60,9 @@ import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.project.ProjectCreator
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
-import me.kenzierocks.mcpide.util.createLineOffsets
 import me.kenzierocks.mcpide.util.openErrorDialog
-import me.kenzierocks.mcpide.util.produceTokens
 import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
-import okhttp3.internal.toImmutableMap
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
@@ -108,16 +100,24 @@ class ModelProcessing @Inject constructor(
                         is ExportMappings -> exportMappings()
                         is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)
                         is SetInitialMappings -> initMappings(msg.srgMappingsZip)
-                        is OpenFile -> openFile(msg.file)
-                        is Rename -> rename(msg.file, msg.old, msg.new)
+                        is Rename -> rename(msg.old, msg.new)
+                        is RemoveRenames -> removeRenames(msg.srgNames)
                         is RetrieveMappings -> runCatching {
                             requireProjectWorker().read {
-                                mappingStorage.toImmutableMap()
+                                MappingInfo(
+                                    initialMappings.toMap(),
+                                    exportedMappings.toMap()
+                                )
                             }
                         }.fold(msg.result::complete, msg.result::completeExceptionally)
+                        is SaveProject -> saveProject()
                     })
                 } catch (e: Exception) {
                     logger.warn(e) { "Error in worker loop" }
+                    e.openErrorDialog(
+                        title = "Worker Error",
+                        header = "Error in worker loop"
+                    )
                 }
             }
         }
@@ -200,17 +200,37 @@ class ModelProcessing @Inject constructor(
         }
     }
 
-    private suspend fun rename(path: Path, old: String, new: String) {
+    private suspend fun rename(old: String, new: String) {
         requireProjectWorker().write(suspendFor = true) { addNewMapping(old, new) }
-        openFile(path)
+        sendMessage(RefreshOpenFiles)
     }
 
-    private fun exportMappings() {
-
+    private suspend fun removeRenames(srgNames: Set<String>) {
+        requireProjectWorker().write(suspendFor = true) { removeMappings(srgNames) }
+        sendMessage(RefreshOpenFiles)
     }
 
-    private suspend fun openFile(file: Path) {
-        val text = withContext(Dispatchers.IO) { Files.readString(file) }
-        sendMessage(OpenContent(file, text))
+    private data class ExportInfo(
+        val dir: Path,
+        val mapping: Map<String, SrgMapping>,
+        val exported: Map<String, SrgMapping>
+    )
+
+    private suspend fun exportMappings() {
+        val export = requireProjectWorker().read {
+            ExportInfo(directory, initialMappings.toMap(), exportedMappings.toMap())
+        }
+        Files.newBufferedWriter(export.dir.resolve("exported-commands.txt")).use { writer ->
+            export.exported.values.forEach { mapping ->
+                writer.appendln(mapping.toCommand())
+            }
+        }
     }
+
+    private suspend fun saveProject() {
+        requireProjectWorker().write {
+            save(force = true)
+        }
+    }
+
 }

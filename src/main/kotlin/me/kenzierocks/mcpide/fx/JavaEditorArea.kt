@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.StatusUpdate
-import me.kenzierocks.mcpide.comms.retrieveMappings
+import me.kenzierocks.mcpide.comms.retrieveMappingInfo
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
@@ -92,7 +92,7 @@ class JavaEditorArea(
     private suspend fun computeHighlighting(text: String): Highlighting? {
         publishComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
         try {
-            val mappings = publishComms.modelChannel.retrieveMappings()
+            val mappings = publishComms.modelChannel.retrieveMappingInfo()
             return provideHighlighting(text, mappings)
         } finally {
             publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
@@ -105,9 +105,9 @@ class JavaEditorArea(
 
     suspend fun startRename() {
         val sel = trySpecialSelectWord() ?: return
-        caretSelectionBind.selectRange(sel.first, sel.last)
         val srgName = getStyleSpans(sel.first, sel.last)
             .single().style.srgName ?: return
+        caretSelectionBind.selectRange(sel.first, sel.last)
         val renameDialog = RenameDialog.create()
         val selBounds = selectionBounds.orElse(null) ?: throw IllegalStateException("Expected bounds")
         renameDialog.popup.show(this, selBounds.minX, selBounds.maxY)
@@ -117,11 +117,11 @@ class JavaEditorArea(
         if (text.isEmpty() || !text.all { it.isJavaIdentifierPart() } || !text[0].isJavaIdentifierStart()) {
             return
         }
-        val mappings = publishComms.modelChannel.retrieveMappings()
-        if (srgName in mappings && !askProceedRename()) {
+        val mappings = publishComms.modelChannel.retrieveMappingInfo()
+        if (srgName in mappings.mappings && !askProceedRename()) {
             return
         }
-        publishComms.modelChannel.send(Rename(path, srgName, text))
+        publishComms.modelChannel.send(Rename(srgName, text))
     }
 
     private suspend fun askProceedRename(): Boolean {

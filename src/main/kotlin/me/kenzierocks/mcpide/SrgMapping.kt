@@ -40,6 +40,8 @@ data class SrgMapping(
     @JsonIgnore
     val type = srgName.detectSrgType()
         ?: throw IllegalArgumentException("SRG name did not contain type prefix")
+
+    fun toCommand() = "!${type.commandPrefix} $srgName $newName" + " $desc".ifBlank { "" }
 }
 
 @Suppress("unused")
@@ -50,10 +52,13 @@ enum class Side {
 }
 
 @Suppress("unused")
-enum class SrgType(val prefix: String) {
-    FUNCTION("func"),
-    FIELD("field"),
-    PARAMTER("p")
+enum class SrgType(
+    val prefix: String,
+    val commandPrefix: String
+) {
+    FUNCTION("func", "sm"),
+    FIELD("field", "sf"),
+    PARAMTER("p", "sp")
 }
 
 // match TYPE_, to prevent other misc. matches

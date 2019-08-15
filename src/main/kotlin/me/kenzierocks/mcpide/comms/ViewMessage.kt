@@ -35,6 +35,6 @@ object AskDecompileSetup : ViewMessage()
 
 data class OpenInFileTree(val directory: Path) : ViewMessage()
 
-data class OpenContent(val source: Path, val content: String) : ViewMessage()
+object RefreshOpenFiles : ViewMessage()
 
 data class StatusUpdate(val category: String, val status: String) : ViewMessage()

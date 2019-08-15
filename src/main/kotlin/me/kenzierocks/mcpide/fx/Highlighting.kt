@@ -46,7 +46,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.withIndex
 import me.kenzierocks.mcpide.SRG_REGEX
-import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.comms.MappingInfo
 import me.kenzierocks.mcpide.detectSrgType
 import me.kenzierocks.mcpide.util.createLineOffsets
 import me.kenzierocks.mcpide.util.produceTokens
@@ -64,7 +64,7 @@ class Highlighting(
     val spans: StyleSpans<MapStyle>
 )
 
-suspend fun provideHighlighting(unmappedText: String, mappings: Map<String, SrgMapping>): Highlighting? {
+suspend fun provideHighlighting(unmappedText: String, mappings: MappingInfo): Highlighting? {
     return coroutineScope {
         val mapped = provideMapped(unmappedText, mappings)
         val tokens = produceTokens(StringProvider(mapped.text))
@@ -137,7 +137,7 @@ private data class Change(
     val token: Token
 )
 
-private suspend fun provideMapped(text: String, mappings: Map<String, SrgMapping>): Mapped {
+private suspend fun provideMapped(text: String, mappings: MappingInfo): Mapped {
     return coroutineScope {
         val replacements = mutableMapOf<String, String>()
         val additions = TreeMap<Int, Change>()
@@ -146,7 +146,8 @@ private suspend fun provideMapped(text: String, mappings: Map<String, SrgMapping
             .filter { it.kind == GeneratedJavaParserConstants.IDENTIFIER }
             .withIndex()
             .mapNotNull { (i, token) ->
-                val newName = (mappings[token.image]?.newName
+                val srgMapping = mappings.exported[token.image] ?: mappings.mappings[token.image]
+                val newName = (srgMapping?.newName
                     ?: token.image.takeIf { n -> n.detectSrgType() != null })
                 newName?.let { name -> i to Change(token.image, name, token) }
             }

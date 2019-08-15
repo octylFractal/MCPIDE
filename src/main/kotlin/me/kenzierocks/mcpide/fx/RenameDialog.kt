@@ -60,7 +60,7 @@ class RenameDialog private constructor(
             parent.children.add(textField)
             popup.content.add(parent)
 
-            popup.isAutoHide = false
+            popup.isAutoHide = true
 
             Nodes.addInputMap(textField, process(keyPressed(KeyCode.ESCAPE)) {
                 textField.text = ""
