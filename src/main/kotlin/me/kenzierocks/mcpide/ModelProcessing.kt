@@ -107,6 +107,13 @@ class ModelProcessing @Inject constructor(
 
     fun start() {
         workerScope.launch {
+            try {
+                fileCache.cacheEntry("most_recent.txt")
+                    .takeIf { Files.exists(it) }?.let { Path.of(Files.readString(it)) }
+                    ?.takeIf { Files.exists(it) }?.let { loadProject(it) }
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to load most recent project entry." }
+            }
             while (!modelComms.modelChannel.isClosedForReceive) {
                 try {
                     exhaustive(when (val msg = modelComms.modelChannel.receive()) {
@@ -214,6 +221,7 @@ class ModelProcessing @Inject constructor(
                 sendMessage(AskDecompileSetup)
             }
             val fs = FileSystems.newFileSystem(minecraftJar, null)
+            Files.writeString(fileCache.cacheEntry("most_recent.txt"), path.toAbsolutePath().toString())
             sendMessage(OpenInFileTree(fs.getPath("/")))
         }
     }

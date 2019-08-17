@@ -154,7 +154,6 @@ class MainController @Inject constructor(
 
     fun startEventLoop() {
         viewScope.launch {
-            sendMessage(LoadProject(Paths.get("/home/octy/Documents/mcp_reversing")))
             while (!viewComms.viewChannel.isClosedForReceive) {
                 val msg = viewComms.viewChannel.receive()
                 handleMessage(msg)
