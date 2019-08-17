@@ -56,7 +56,7 @@ enum class SrgType(
     val prefix: String,
     val commandPrefix: String
 ) {
-    FUNCTION("func", "sm"),
+    METHOD("func", "sm"),
     FIELD("field", "sf"),
     PARAMTER("p", "sp")
 }

@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.withIndex
 import me.kenzierocks.mcpide.SRG_REGEX
+import me.kenzierocks.mcpide.SrgType
 import me.kenzierocks.mcpide.comms.MappingInfo
 import me.kenzierocks.mcpide.detectSrgType
 import me.kenzierocks.mcpide.util.createLineOffsets
@@ -98,6 +99,7 @@ suspend fun provideHighlighting(unmappedText: String, mappings: MappingInfo): Hi
                 if (gap > 0) {
                     builder.add(MapStyle(setOf("default-text"), null), gap)
                 }
+                val styleSet = mutableSetOf(style)
                 val srgName = when (token.kind) {
                     GeneratedJavaParserConstants.IDENTIFIER -> {
                         val change = when (val c = mapped.changes[tokenCount]) {
@@ -108,6 +110,13 @@ suspend fun provideHighlighting(unmappedText: String, mappings: MappingInfo): Hi
                                     "Out of sync! $srg->$new (${cTok.toExtendedString()})" +
                                         " is not ${token.toExtendedString()}"
                                 }
+                                styleSet.add("mapped")
+                                styleSet.add(when (srg.detectSrgType()) {
+                                    SrgType.FIELD -> "field"
+                                    SrgType.METHOD -> "method"
+                                    SrgType.PARAMTER -> "param"
+                                    null -> throw IllegalStateException("Should not be null.")
+                                })
                                 srg
                             }
                         }
@@ -116,7 +125,7 @@ suspend fun provideHighlighting(unmappedText: String, mappings: MappingInfo): Hi
                     }
                     else -> null
                 }
-                builder.add(MapStyle(setOf(style), srgName), end - start)
+                builder.add(MapStyle(styleSet, srgName), end - start)
                 lastSpan = end
             }
         }

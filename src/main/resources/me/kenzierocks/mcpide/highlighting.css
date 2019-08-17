@@ -10,6 +10,22 @@
     -fx-fill: #9876AA;
 }
 
+.mapped {
+    -fx-underline: true;
+}
+
+.mapped.field {
+    -fx-fill: #6CBEED;
+}
+
+.mapped.method {
+    -fx-fill: #60E1E0;
+}
+
+.mapped.param {
+    -fx-fill: #DD2C61;
+}
+
 .string-literal {
     -fx-fill: green;
 }
@@ -19,7 +35,7 @@
 }
 
 .code-area {
-    -fx-background-color: -dark-bg-color;
+    -fx-background-color: -darker-bg-color;
     -fx-font-size: 16px;
 }
 
