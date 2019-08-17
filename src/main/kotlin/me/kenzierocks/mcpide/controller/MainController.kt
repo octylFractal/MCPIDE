@@ -110,7 +110,6 @@ import java.io.IOException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import javax.inject.Inject
@@ -130,8 +129,8 @@ class MainController @Inject constructor(
 ) {
 
     companion object {
-        private val TREE_ITEM_ALPHABETICAL = Comparator.comparing<TreeItem<Path>, Path> {
-            it.value
+        private val TREE_ITEM_ALPHABETICAL = Comparator.comparing<TreeItem<DirTreeEntry>, String> {
+            it.value.name
         }
     }
 
@@ -142,7 +141,7 @@ class MainController @Inject constructor(
     @FXML
     private lateinit var quitMenuItem: MenuItem
     @FXML
-    private lateinit var fileTree: TreeView<Path>
+    private lateinit var fileTree: TreeView<DirTreeEntry>
     @FXML
     private lateinit var textView: TabPane
     @FXML
@@ -166,15 +165,16 @@ class MainController @Inject constructor(
         fileTree.isEditable = false
         fileTree.cellFactory = Callback {
             PathCell(
+                resources.syncIcon,
                 resources.fileIcon,
                 resources.folderIcon,
                 resources.folderOpenIcon
             ).also { cell ->
                 Nodes.addInputMap(cell, process(mouseClicked(MouseButton.PRIMARY)) { e ->
                     when {
-                        e.clickCount == 2 && isValidPath(cell.item) -> {
+                        e.clickCount == 2 && isValidPath(cell.item.path) -> {
                             viewScope.launch {
-                                openFile(cell.item)
+                                openFile(cell.item.path!!)
                             }
                             InputHandler.Result.CONSUME
                         }
@@ -193,11 +193,20 @@ class MainController @Inject constructor(
         return path != null && Files.exists(path) && !Files.isDirectory(path)
     }
 
+    private fun fsRootName(path: Path): String {
+        return when (path.fileSystem.provider().scheme) {
+            // jar:file://...!/
+            "zip", "jar" -> path.toUri().rawSchemeSpecificPart
+                .removePrefix("file://").removeSuffix("!/")
+            else -> "/"
+        }
+    }
+
     private suspend fun handleMessage(viewMessage: ViewMessage) {
         exhaustive(when (viewMessage) {
             is OpenInFileTree -> {
                 val dirTree = workerScope.async { expandDirectory(viewMessage.directory) }
-                fileTree.root = TreeItem(Paths.get("Loading project files..."))
+                fileTree.root = TreeItem(DirTreeEntry(null, "Loading project files..."))
                 fileTree.root = dirTree.await()
             }
             is AskDecompileSetup -> askDecompileSetup()
@@ -207,13 +216,14 @@ class MainController @Inject constructor(
         })
     }
 
-    private fun expandDirectory(directory: Path): TreeItem<Path> {
-        var currentParentNode = TreeItem(directory)
+    private fun expandDirectory(directory: Path): TreeItem<DirTreeEntry> {
+        val dirName = directory.fileName?.toString() ?: fsRootName(directory)
+        var currentParentNode = TreeItem(DirTreeEntry(directory, dirName))
 
         Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                 if (dir != directory) {
-                    val newNode = TreeItem(dir)
+                    val newNode = TreeItem(DirTreeEntry(dir, dir.fileName!!.toString()))
                     currentParentNode.children.add(newNode)
                     currentParentNode = newNode
                 }
@@ -223,13 +233,22 @@ class MainController @Inject constructor(
             override fun postVisitDirectory(dir: Path?, exc: IOException?): FileVisitResult {
                 currentParentNode.children.sortWith(TREE_ITEM_ALPHABETICAL)
                 if (dir != directory) {
+                    val child = currentParentNode.children.singleOrNull()
+                    if (child != null && Files.isDirectory(child.value.path!!)) {
+                        // collapse child into this node, absorb its path + name
+                        currentParentNode.children.setAll(child.children)
+                        currentParentNode.value = DirTreeEntry(
+                            child.value.path,
+                            currentParentNode.value.name + "/" + child.value.name
+                        )
+                    }
                     currentParentNode = currentParentNode.parent
                 }
                 return FileVisitResult.CONTINUE
             }
 
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                currentParentNode.children.add(TreeItem(file))
+                currentParentNode.children.add(TreeItem(DirTreeEntry(file, file.fileName!!.toString())))
                 return FileVisitResult.CONTINUE
             }
 
@@ -527,11 +546,17 @@ class MainController @Inject constructor(
         get() = (content as? VirtualizedScrollPane<*>)?.getContent() as? JavaEditorArea
 }
 
+data class DirTreeEntry(
+    val path: Path?,
+    val name: String
+)
+
 class PathCell(
+    private val imageSync: Image,
     private val imageFile: Image,
     private val imageFolder: Image,
     private val imageFolderOpen: Image
-) : TreeCell<Path>() {
+) : TreeCell<DirTreeEntry>() {
 
     init {
         val updateListener = InvalidationListener {
@@ -555,30 +580,23 @@ class PathCell(
         }
     }
 
-    override fun updateItem(item: Path?, empty: Boolean) {
+    override fun updateItem(item: DirTreeEntry?, empty: Boolean) {
         super.updateItem(item, empty)
         if (empty || item == null) {
             text = null
             graphic = null
         } else {
-            text = item.fileName?.toString() ?: fsRootName(item)
+            text = item.name
+            val path = item.path
             val imageView = ImageView(when {
-                Files.isDirectory(item) -> imageFolder
+                path == null -> imageSync
+                Files.isDirectory(path) -> imageFolder
                 else -> imageFile
             })
             imageView.fitHeight = 16.0
             imageView.fitWidth = 16.0
             graphic = imageView
             treeItem?.let { updateOpen(it.isExpanded) }
-        }
-    }
-
-    private fun fsRootName(path: Path): String {
-        return when (path.fileSystem.provider().scheme) {
-            // jar:file://...!/
-            "zip", "jar" -> path.toUri().rawSchemeSpecificPart
-                .removePrefix("file://").removeSuffix("!/")
-            else -> "/"
         }
     }
 }

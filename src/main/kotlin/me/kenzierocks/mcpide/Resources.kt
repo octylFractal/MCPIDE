@@ -37,6 +37,7 @@ class Resources @Inject constructor() {
         return Image(ResourceUrl(location).toExternalForm(), true)
     }
 
+    val syncIcon = loadIcon("font-awesome/sync-alt-solid.png")
     val fileIcon = loadIcon("font-awesome/file-regular.png")
     val folderIcon = loadIcon("font-awesome/folder-regular.png")
     val folderOpenIcon = loadIcon("font-awesome/folder-open-regular.png")
