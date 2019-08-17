@@ -76,6 +76,7 @@ import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
+import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
@@ -461,6 +462,7 @@ class MainController @Inject constructor(
             try {
                 if (confirmCloseWithUser()) {
                     app.stage.close()
+                    sendMessage(Exit)
                 }
             } finally {
                 isClosing = false

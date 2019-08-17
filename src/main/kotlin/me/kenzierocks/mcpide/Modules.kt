@@ -55,6 +55,7 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.util.OwnerExecutor
 import me.kenzierocks.mcpide.util.openErrorDialog
 import mu.KotlinLogging
 import okhttp3.Cache
@@ -105,15 +106,18 @@ object ViewModule {
 @Module
 object ModelModule {
     @[Provides Singleton Model]
-    fun provideModelScope(coroutineExceptionHandler: CoroutineExceptionHandler) =
-        CoroutineScope(Executors.newFixedThreadPool(4, ThreadFactoryBuilder()
+    fun provideModelScope(coroutineExceptionHandler: CoroutineExceptionHandler): CoroutineScope {
+        val executor = Executors.newFixedThreadPool(4, ThreadFactoryBuilder()
             .setNameFormat("model-worker-%d")
             // ensure that all actions finish before exiting
             .setDaemon(false)
-            .build()).asCoroutineDispatcher()
+            .build())
+        return CoroutineScope(executor.asCoroutineDispatcher()
             + CoroutineName("ModelWorker")
             + coroutineExceptionHandler
+            + OwnerExecutor(executor)
             + SupervisorJob())
+    }
 }
 
 @Module

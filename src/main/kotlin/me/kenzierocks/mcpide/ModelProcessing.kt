@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
+import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.MappingInfo
@@ -62,6 +63,7 @@ import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.project.ProjectCreator
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
+import me.kenzierocks.mcpide.util.OwnerExecutor
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
@@ -108,6 +110,7 @@ class ModelProcessing @Inject constructor(
             while (!modelComms.modelChannel.isClosedForReceive) {
                 try {
                     exhaustive(when (val msg = modelComms.modelChannel.receive()) {
+                        is Exit -> workerScope.coroutineContext[OwnerExecutor]!!.executor.shutdownNow()
                         is LoadProject -> loadProject(msg.projectDirectory)
                         is ExportMappings -> exportMappings()
                         is DecompileMinecraft -> decompileMinecraft(msg.mcpConfigZip)

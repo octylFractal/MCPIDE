@@ -34,6 +34,16 @@ import kotlin.coroutines.coroutineContext
 
 sealed class ModelMessage
 
+/**
+ * Message to shutdown the executor running model processing.
+ *
+ * <p>
+ * This is necessary because we use non-daemon threads to ensure
+ * that the JVM doesn't exit before we get a chance to save on quit.
+ * </p>
+ */
+object Exit : ModelMessage()
+
 data class LoadProject(val projectDirectory: Path) : ModelMessage()
 
 object ExportMappings : ModelMessage()
