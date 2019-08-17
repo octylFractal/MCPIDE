@@ -1,7 +1,7 @@
 language: java
 script: ./gradlew build -s
 jdk:
-  - oraclejdk8
+  - openjdk12
 # Caching for Gradle files, prevents hitting Maven too much.
 before_cache:
   - find /home/travis/.gradle/ . -name '*.lock' -print -exec rm -f {} \;
@@ -13,15 +13,6 @@ cache:
 
 # Faster builds without sudo.
 sudo: false
-addons:
-  apt:
-    packages:
-      - oracle-java8-installer
-# Code Coverage!
-before_install:
-  - pip install --user codecov
-after_success:
-  - codecov
 after_script:
   # Make sure to kill daemon
   - ./gradlew --stop
