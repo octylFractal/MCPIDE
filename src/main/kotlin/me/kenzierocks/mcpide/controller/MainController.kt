@@ -26,7 +26,6 @@
 package me.kenzierocks.mcpide.controller
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
-import javafx.application.Platform
 import javafx.beans.InvalidationListener
 import javafx.beans.binding.Bindings
 import javafx.beans.property.ReadOnlyProperty
@@ -34,6 +33,7 @@ import javafx.collections.FXCollections
 import javafx.fxml.FXML
 import javafx.scene.Scene
 import javafx.scene.control.Alert
+import javafx.scene.control.ButtonBar
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.Label
@@ -57,6 +57,7 @@ import javafx.scene.layout.VBox
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
 import javafx.stage.Stage
+import javafx.stage.WindowEvent
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,12 +82,14 @@ import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.RefreshOpenFiles
 import me.kenzierocks.mcpide.comms.RemoveRenames
+import me.kenzierocks.mcpide.comms.RetrieveDirtyStatus
+import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.SaveProject
 import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
-import me.kenzierocks.mcpide.comms.retrieveMappingInfo
+import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
@@ -382,7 +385,7 @@ class MainController @Inject constructor(
     @FXML
     fun openExportableMappings() {
         viewScope.launch {
-            val (_, exported) = viewComms.modelChannel.retrieveMappingInfo()
+            val (_, exported) = viewComms.modelChannel.sendForResponse(RetrieveMappings)
             val table = TableView<SrgMapping>()
             withContext(Dispatchers.Default) {
                 table.items.setAll(exported.values)
@@ -442,7 +445,56 @@ class MainController @Inject constructor(
 
     @FXML
     fun quit() {
-        Platform.exit()
+        app.stage.fireEvent(WindowEvent(app.stage, WindowEvent.WINDOW_CLOSE_REQUEST))
+    }
+
+    private var isClosing = false
+
+    fun confirmClose() : Boolean {
+        if (isClosing) {
+            // we're already handling a close request.
+            // don't stack up another question to close
+            return false
+        }
+        isClosing = true
+        viewScope.launch {
+            try {
+                if (confirmCloseWithUser()) {
+                    app.stage.close()
+                }
+            } finally {
+                isClosing = false
+            }
+        }
+        return false
+    }
+
+    private suspend fun confirmCloseWithUser() : Boolean {
+        if (viewComms.modelChannel.sendForResponse(RetrieveDirtyStatus)) {
+            val save = Alert(Alert.AlertType.CONFIRMATION)
+            save.title = "Confirm Quit (Unsaved Changes)"
+            save.headerText = "Do you want to save before quitting?"
+            val noSaveBtn = ButtonType("Don't Save", ButtonBar.ButtonData.LEFT)
+            val cancelBtn = ButtonType("Cancel", ButtonBar.ButtonData.NO)
+            val saveBtn = ButtonType("Save", ButtonBar.ButtonData.YES)
+            save.buttonTypes.setAll(noSaveBtn, cancelBtn, saveBtn)
+            return when (save.showAndSuspend()) {
+                saveBtn -> {
+                    sendMessage(SaveProject)
+                    true
+                }
+                noSaveBtn -> true
+                else -> false
+            }
+        } else {
+            val confirm = Alert(Alert.AlertType.CONFIRMATION)
+            confirm.title = "Confirm Quit"
+            confirm.headerText = "Are you sure you want to quit MCPIDE?"
+            return when (confirm.showAndSuspend()) {
+                null, ButtonType.CANCEL -> false
+                else -> true
+            }
+        }
     }
 
     @FXML

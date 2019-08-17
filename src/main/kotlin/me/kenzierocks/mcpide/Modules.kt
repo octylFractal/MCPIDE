@@ -33,6 +33,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import dagger.Module
 import dagger.Provides
 import javafx.fxml.FXMLLoader
@@ -42,6 +43,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.runBlocking
@@ -58,6 +60,7 @@ import mu.KotlinLogging
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Executors
 import javax.inject.Provider
 import javax.inject.Singleton
 
@@ -103,7 +106,11 @@ object ViewModule {
 object ModelModule {
     @[Provides Singleton Model]
     fun provideModelScope(coroutineExceptionHandler: CoroutineExceptionHandler) =
-        CoroutineScope(Dispatchers.Default
+        CoroutineScope(Executors.newFixedThreadPool(4, ThreadFactoryBuilder()
+            .setNameFormat("model-worker-%d")
+            // ensure that all actions finish before exiting
+            .setDaemon(false)
+            .build()).asCoroutineDispatcher()
             + CoroutineName("ModelWorker")
             + coroutineExceptionHandler
             + SupervisorJob())

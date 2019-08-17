@@ -90,7 +90,7 @@ class Project(
     }
 
     fun removeMappings(srgNames: Set<String>) {
-        exportedMappings.keys.removeAll(srgNames)
+        dirty = dirty || exportedMappings.keys.removeAll(srgNames)
     }
 
     // IO, save/load functions, work with files

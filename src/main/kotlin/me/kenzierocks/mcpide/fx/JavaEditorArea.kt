@@ -39,8 +39,9 @@ import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.Rename
+import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
-import me.kenzierocks.mcpide.comms.retrieveMappingInfo
+import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
@@ -92,7 +93,7 @@ class JavaEditorArea(
     private suspend fun computeHighlighting(text: String): Highlighting? {
         publishComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
         try {
-            val mappings = publishComms.modelChannel.retrieveMappingInfo()
+            val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
             return provideHighlighting(text, mappings)
         } finally {
             publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
@@ -117,7 +118,7 @@ class JavaEditorArea(
         if (text.isEmpty() || !text.all { it.isJavaIdentifierPart() } || !text[0].isJavaIdentifierStart()) {
             return
         }
-        val mappings = publishComms.modelChannel.retrieveMappingInfo()
+        val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
         if (srgName in mappings.mappings && !askProceedRename()) {
             return
         }

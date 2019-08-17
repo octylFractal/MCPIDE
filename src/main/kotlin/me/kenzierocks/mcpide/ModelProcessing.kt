@@ -48,6 +48,8 @@ import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.RefreshOpenFiles
 import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.Rename
+import me.kenzierocks.mcpide.comms.RespondingModelMessage
+import me.kenzierocks.mcpide.comms.RetrieveDirtyStatus
 import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.SaveProject
 import me.kenzierocks.mcpide.comms.SetInitialMappings
@@ -91,6 +93,16 @@ class ModelProcessing @Inject constructor(
         modelComms.viewChannel.send(viewMessage)
     }
 
+    private inline fun <M : RespondingModelMessage<R>, R> M.responseImpl(
+        block: M.() -> R
+    ) {
+        try {
+            result.complete(block())
+        } catch (e: Throwable) {
+            result.completeExceptionally(e)
+        }
+    }
+
     fun start() {
         workerScope.launch {
             while (!modelComms.modelChannel.isClosedForReceive) {
@@ -102,14 +114,17 @@ class ModelProcessing @Inject constructor(
                         is SetInitialMappings -> initMappings(msg.srgMappingsZip)
                         is Rename -> rename(msg.old, msg.new)
                         is RemoveRenames -> removeRenames(msg.srgNames)
-                        is RetrieveMappings -> runCatching {
+                        is RetrieveMappings -> msg.responseImpl {
                             requireProjectWorker().read {
                                 MappingInfo(
                                     initialMappings.toMap(),
                                     exportedMappings.toMap()
                                 )
                             }
-                        }.fold(msg.result::complete, msg.result::completeExceptionally)
+                        }
+                        is RetrieveDirtyStatus -> msg.responseImpl {
+                            requireProjectWorker().read { dirty }
+                        }
                         is SaveProject -> saveProject()
                     })
                 } catch (e: Exception) {

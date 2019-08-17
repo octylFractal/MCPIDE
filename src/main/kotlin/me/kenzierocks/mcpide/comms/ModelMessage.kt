@@ -48,18 +48,35 @@ data class Rename(val old: String, val new: String) : ModelMessage()
 
 data class RemoveRenames(val srgNames: Set<String>) : ModelMessage()
 
+sealed class RespondingModelMessage<R>(parent: Job? = null) : ModelMessage() {
+    val result = CompletableDeferred<R>(parent = parent)
+}
+
+interface RMMConstructor<R, M : RespondingModelMessage<R>> {
+    operator fun invoke(parent: Job?): M
+}
+
+suspend inline fun <M : RespondingModelMessage<R>, R> SendChannel<ModelMessage>.sendForResponse(
+    constructor: RMMConstructor<R, M>
+): R {
+    val msg = constructor.invoke(coroutineContext[Job])
+    send(msg)
+    return msg.result.await()
+}
+
 data class MappingInfo(
     val mappings: Map<String, SrgMapping>,
     val exported: Map<String, SrgMapping>
 )
 
-class RetrieveMappings(parent: Job? = null) : ModelMessage() {
-    val result = CompletableDeferred<MappingInfo>(parent = parent)
+class RetrieveMappings(parent: Job? = null) : RespondingModelMessage<MappingInfo>(parent) {
+    companion object Constructor : RMMConstructor<MappingInfo, RetrieveMappings> {
+        override operator fun invoke(parent: Job?) = RetrieveMappings(parent)
+    }
 }
 
-suspend fun SendChannel<ModelMessage>.retrieveMappingInfo(): MappingInfo {
-    return RetrieveMappings(parent = coroutineContext[Job]).let { msg ->
-        send(msg)
-        msg.result.await()
+class RetrieveDirtyStatus(parent: Job? = null) : RespondingModelMessage<Boolean>(parent) {
+    companion object Constructor : RMMConstructor<Boolean, RetrieveDirtyStatus> {
+        override operator fun invoke(parent: Job?) = RetrieveDirtyStatus(parent)
     }
 }

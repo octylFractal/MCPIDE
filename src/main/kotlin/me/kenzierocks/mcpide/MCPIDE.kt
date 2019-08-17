@@ -70,6 +70,11 @@ class MCPIDE : Application() {
         stage.show()
         stage.centerOnScreen()
         stage.isMaximized = true
+        stage.setOnCloseRequest {
+            if (!controller.confirmClose()) {
+                it.consume()
+            }
+        }
         logger.info { "Primary stage opened." }
         try {
             val sv = Class.forName("org.scenicview.ScenicView")
