@@ -42,6 +42,7 @@ import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.sendForResponse
+import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
@@ -126,15 +127,9 @@ class JavaEditorArea(
     }
 
     private suspend fun askProceedRename(): Boolean {
-        val d = Alert(Alert.AlertType.CONFIRMATION)
-        d.title = "Overwrite Confirmation"
-        d.contentText = "Are you sure you want to overwrite an existing mapping?"
-        d.isResizable = true
-        d.dialogPane.setPrefSizeFromContent()
-        return when (d.showAndSuspend()) {
-            null, ButtonType.CANCEL -> false
-            else -> true
-        }
+        return confirmSimple(
+            "Overwrite Name", youWantTo = "overwrite an existing mapping"
+        )
     }
 
     override fun selectWord() {

@@ -28,8 +28,6 @@ package me.kenzierocks.mcpide.controller
 import javafx.collections.FXCollections
 import javafx.collections.ObservableList
 import javafx.fxml.FXML
-import javafx.scene.control.Alert
-import javafx.scene.control.ButtonType
 import javafx.scene.control.ListView
 import javafx.scene.control.SelectionMode
 import javafx.scene.control.TableColumn
@@ -43,7 +41,7 @@ import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.InternalizeRenames
 import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.ViewComms
-import me.kenzierocks.mcpide.util.showAndSuspend
+import me.kenzierocks.mcpide.util.confirmSimple
 import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
 import org.fxmisc.wellbehaved.event.InputMap.consume
 import org.fxmisc.wellbehaved.event.Nodes
@@ -116,15 +114,12 @@ class ExportableMappingsController @Inject constructor(
     private suspend fun Action.confirmAction(
         items: List<SrgMapping>
     ): Boolean {
-        val confirm = Alert(Alert.AlertType.CONFIRMATION)
-        confirm.title = "Confirm $actionTitle"
-        confirm.headerText = "Are you sure you want to $actionQuestion these names?"
-        confirm.dialogPane.content = ListView(FXCollections.observableList(
-            items.map { "${it.srgName}->${it.newName}" }
-        ))
-        return when (confirm.showAndSuspend()) {
-            null, ButtonType.CANCEL -> false
-            else -> true
+        return confirmSimple(
+            actionTitle, youWantTo = "$actionQuestion these names"
+        ) {
+            dialogPane.content = ListView(FXCollections.observableList(
+                items.map { "${it.srgName}->${it.newName}" }
+            ))
         }
     }
 

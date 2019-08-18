@@ -32,6 +32,7 @@ import javafx.beans.value.ObservableValue
 import javafx.event.EventHandler
 import javafx.scene.Parent
 import javafx.scene.control.Alert
+import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
 import javafx.scene.control.TextArea
@@ -115,6 +116,22 @@ suspend fun Throwable.openErrorDialog(title: String = "Error",
         dialog.dialogPane.setPrefSizeFromContent()
         dialog.showAndSuspend()
     }
+}
+
+suspend inline fun confirmSimple(
+    actionTitle: String,
+    youWantTo: String,
+    extraConfig: Alert.() -> Unit = {}
+) : Boolean {
+    val confirm = Alert(Alert.AlertType.CONFIRMATION)
+    confirm.buttonTypes.setAll(
+        ButtonType.YES,
+        ButtonType.NO
+    )
+    confirm.title = "Confirm $actionTitle"
+    confirm.headerText = "Are you sure you want to $youWantTo?"
+    confirm.extraConfig()
+    return confirm.showAndSuspend() == ButtonType.YES
 }
 
 private val logger = KotlinLogging.logger { }

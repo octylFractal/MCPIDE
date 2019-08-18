@@ -182,16 +182,24 @@ class ModelProcessing @Inject constructor(
     }
 
     private suspend fun initMappings(srgMappingsZip: Path) {
-        val result = flowOf("fields.csv", "methods.csv", "params.csv")
-            .flatMapMerge { readSrgZipEntry(srgMappingsZip, it) }
+        sendMessage(StatusUpdate("Names Import", "Reading files"))
+        try {
+            val result = flowOf("fields.csv", "methods.csv", "params.csv")
+                .flatMapMerge { readSrgZipEntry(srgMappingsZip, it) }
 
-        val p = requireProjectWorker()
-        p.write {
-            result.collect {
-                addMapping(it)
+            sendMessage(StatusUpdate("Names Import", "Saving to project"))
+            val p = requireProjectWorker()
+            p.write(suspendFor = true) {
+                clearInitialMappings()
+                result.collect {
+                    addMapping(it)
+                }
             }
+            p.write { save() }
+        } finally {
+            sendMessage(StatusUpdate("Names Import", ""))
         }
-        p.write { save() }
+        sendMessage(RefreshOpenFiles)
     }
 
     private fun readSrgZipEntry(srgMappingsZip: Path, entry: String): Flow<SrgMapping> {

@@ -34,6 +34,7 @@ import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Reader
 import java.io.Writer
@@ -89,6 +90,11 @@ class Project(
         addMapping(newMapping, forExport = true)
     }
 
+    fun clearInitialMappings() {
+        initialMappings.clear()
+        dirty = true
+    }
+
     fun removeMappings(srgNames: Set<String>) {
         dirty = dirty || exportedMappings.keys.removeAll(srgNames)
     }
@@ -110,7 +116,9 @@ class Project(
     fun hasMinecraftJar() = Files.exists(minecraftJar)
 
     fun copyMinecraftJar(from: Path) {
-        Files.copy(from, minecraftJar, StandardCopyOption.REPLACE_EXISTING)
+        safeWrite(minecraftJar) { output ->
+            Files.newInputStream(from).use { it.copyTo(output) }
+        }
     }
 
     fun load() {
@@ -160,11 +168,13 @@ class Project(
         logger.info { "Saved mappings to $exportsFile (count=${exportedMappings.size})" }
     }
 
-    private fun gzWriter(path: Path, block: (Writer) -> Unit) {
-        OutputStreamWriter(
-            GZIPOutputStream(Files.newOutputStream(path)),
-            StandardCharsets.UTF_8
-        ).use(block)
+    private inline fun gzWriter(path: Path, block: (Writer) -> Unit) {
+        safeWrite(path) { output ->
+            OutputStreamWriter(
+                GZIPOutputStream(output),
+                StandardCharsets.UTF_8
+            ).use(block)
+        }
     }
 
     private fun Writer.writeMappings(srgMapping: Sequence<SrgMapping>) {
@@ -173,4 +183,15 @@ class Project(
         srgWriter.writeValues(this).use { seqWriter -> srgMapping.forEach { seqWriter.write(it) } }
     }
 
+}
+
+/**
+ * Write to [file] in a way that ensures a crash won't erase existing data.
+ *
+ * This ensures integrity of save-files.
+ */
+private inline fun safeWrite(file: Path, block: (OutputStream) -> Unit) {
+    val tmp = file.resolveSibling(".new-${file.fileName}")
+    Files.newOutputStream(tmp).use(block)
+    Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
 }

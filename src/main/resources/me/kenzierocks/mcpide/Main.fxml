@@ -35,6 +35,13 @@
                      </accelerator>
                   </MenuItem>
                   <SeparatorMenuItem mnemonicParsing="false" />
+                  <Menu mnemonicParsing="false" text="Re-Import...">
+                    <items>
+                        <MenuItem mnemonicParsing="false" onAction="#reimportConfig" text="MCP Config" />
+                      <MenuItem mnemonicParsing="false" onAction="#reimportNames" text="MCP Names" />
+                    </items>
+                  </Menu>
+                  <SeparatorMenuItem mnemonicParsing="false" />
               <MenuItem fx:id="quitMenuItem" mnemonicParsing="false" onAction="#quit" text="Quit">
                      <accelerator>
                         <KeyCodeCombination alt="UP" code="Q" control="UP" meta="UP" shift="UP" shortcut="DOWN" />

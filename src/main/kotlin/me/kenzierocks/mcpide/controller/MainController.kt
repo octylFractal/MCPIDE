@@ -85,7 +85,7 @@ import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
 import me.kenzierocks.mcpide.resolver.MavenAccess
-import me.kenzierocks.mcpide.util.openScenicView
+import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import mu.KotlinLogging
@@ -391,6 +391,30 @@ class MainController @Inject constructor(
     }
 
     @FXML
+    fun reimportConfig() {
+        viewScope.launch {
+            if (confirmSimple(
+                "Re-Import MCP Config",
+                youWantTo = "re-import your MCP config, overwriting current Minecraft JAR"
+            )) {
+                askDecompileSetup()
+            }
+        }
+    }
+
+    @FXML
+    fun reimportNames() {
+        viewScope.launch {
+            if (confirmSimple(
+                "Re-Import MCP Names",
+                youWantTo = "re-import your MCP names, overwriting current internal names (not exportable)"
+            )) {
+                askInitialMappings()
+            }
+        }
+    }
+
+    @FXML
     fun openExportableMappings() {
         viewScope.launch {
             val (_, exported) = viewComms.modelChannel.sendForResponse(RetrieveMappings)
@@ -449,13 +473,9 @@ class MainController @Inject constructor(
                 else -> false
             }
         } else {
-            val confirm = Alert(Alert.AlertType.CONFIRMATION)
-            confirm.title = "Confirm Quit"
-            confirm.headerText = "Are you sure you want to quit MCPIDE?"
-            return when (confirm.showAndSuspend()) {
-                null, ButtonType.CANCEL -> false
-                else -> true
-            }
+            return confirmSimple(
+                "Quit", youWantTo = "quit MCPIDE"
+            )
         }
     }
 
