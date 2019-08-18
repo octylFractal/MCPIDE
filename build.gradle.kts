@@ -38,7 +38,8 @@ tasks.withType<KotlinCompile> {
             "-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi",
             "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi",
             "-Xuse-experimental=kotlinx.coroutines.FlowPreview",
-            "-Xuse-experimental=kotlinx.io.core.ExperimentalIoApi"
+            "-Xuse-experimental=kotlinx.io.core.ExperimentalIoApi",
+            "-XXLanguage:+PolymorphicSignature"
         )
     }
 }
@@ -124,7 +125,7 @@ tasks.shadowJar {
 }
 
 javafx {
-    version = "12.0.2"
+    version = "13-ea+12"
     modules = listOf("fxml", "controls", "web", "swing").map { "javafx.$it" }
 }
 

@@ -58,6 +58,8 @@ data class Rename(val old: String, val new: String) : ModelMessage()
 
 data class RemoveRenames(val srgNames: Set<String>) : ModelMessage()
 
+data class InternalizeRenames(val srgNames: Set<String>) : ModelMessage()
+
 sealed class RespondingModelMessage<R>(parent: Job? = null) : ModelMessage() {
     val result = CompletableDeferred<R>(parent = parent)
 }

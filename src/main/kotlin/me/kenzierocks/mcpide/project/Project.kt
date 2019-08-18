@@ -93,6 +93,12 @@ class Project(
         dirty = dirty || exportedMappings.keys.removeAll(srgNames)
     }
 
+    fun internalizeMappings(srgNames: Set<String>) {
+        val moves = srgNames.mapNotNull { exportedMappings.remove(it) }.map { it.srgName to it }
+        dirty = dirty || moves.isNotEmpty()
+        initialMappings.putAll(moves)
+    }
+
     // IO, save/load functions, work with files
 
     fun isInitializedOnDisk(): Boolean {

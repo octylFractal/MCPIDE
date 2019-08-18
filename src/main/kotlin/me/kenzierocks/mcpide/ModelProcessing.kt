@@ -42,6 +42,7 @@ import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
+import me.kenzierocks.mcpide.comms.InternalizeRenames
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.MappingInfo
 import me.kenzierocks.mcpide.comms.ModelComms
@@ -124,6 +125,7 @@ class ModelProcessing @Inject constructor(
                         is SetInitialMappings -> initMappings(msg.srgMappingsZip)
                         is Rename -> rename(msg.old, msg.new)
                         is RemoveRenames -> removeRenames(msg.srgNames)
+                        is InternalizeRenames -> internalizeRenames(msg.srgNames)
                         is RetrieveMappings -> msg.responseImpl {
                             requireProjectWorker().read {
                                 MappingInfo(
@@ -234,6 +236,12 @@ class ModelProcessing @Inject constructor(
     private suspend fun removeRenames(srgNames: Set<String>) {
         requireProjectWorker().write(suspendFor = true) { removeMappings(srgNames) }
         sendMessage(RefreshOpenFiles)
+    }
+
+    private suspend fun internalizeRenames(srgNames: Set<String>) {
+        requireProjectWorker().write {
+            internalizeMappings(srgNames)
+        }
     }
 
     private data class ExportInfo(

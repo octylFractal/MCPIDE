@@ -27,6 +27,7 @@ package me.kenzierocks.mcpide
 
 import javafx.fxml.FXMLLoader
 import javafx.scene.Parent
+import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.MainController
 import javax.inject.Inject
@@ -50,4 +51,5 @@ class FxmlFiles @Inject constructor(
 
     fun main() = load<Parent, MainController>("Main.fxml")
     fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
+    fun exportableMappings() = load<Parent, ExportableMappingsController>("ExportableMappings.fxml")
 }

@@ -52,6 +52,7 @@ import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
+import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
@@ -178,11 +179,13 @@ object FxModule {
     @[Provides Singleton]
     fun provideControllerFactory(
         mainController: Provider<MainController>,
-        fileAskDialogController: Provider<FileAskDialogController>
+        fileAskDialogController: Provider<FileAskDialogController>,
+        exportableMappings: Provider<ExportableMappingsController>
     ): ControllerFactory {
         val controllers = mapOf(
             controllerBind(mainController),
-            controllerBind(fileAskDialogController)
+            controllerBind(fileAskDialogController),
+            controllerBind(exportableMappings)
         )
         return object : ControllerFactory {
             override fun call(cls: Class<*>) =

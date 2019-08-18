@@ -5,14 +5,66 @@
     -darker-bg-color: #2E3133;
     -dark-bg-color-alt: #888e91;
     -dark-selected-bg-color: #334DB3;
+
+    /* How to make tables look good */
+    -dark-box-border: ladder(
+            -dark-bg-color,
+            derive(black, 40%) 20%,
+            derive(-dark-bg-color, -15%) 30%
+    );
+    -dark-inner-border: linear-gradient(to bottom,
+    ladder(
+            -dark-bg-color,
+            derive(-dark-bg-color, -30%) 0%,
+            derive(-dark-bg-color, -20%) 40%,
+            derive(-dark-bg-color, -25%) 60%,
+            derive(-dark-bg-color, -55%) 80%,
+            derive(-dark-bg-color, -55%) 90%,
+            derive(-dark-bg-color, -75%) 100%
+    ),
+    ladder(
+            -dark-bg-color,
+            derive(-dark-bg-color, -20%) 0%,
+            derive(-dark-bg-color, -10%) 20%,
+            derive(-dark-bg-color, -5%) 40%,
+            derive(-dark-bg-color, 2%) 60%,
+            derive(-dark-bg-color, 5%) 100%
+    ));
+
+    -fx-table-cell-border-color: derive(-dark-bg-color, 10%);
 }
 
-.root, .tab-content-area, .cell {
+.root, .tab-content-area, .tree-cell {
     -fx-text-fill: -dark-text-color;
     -fx-background-color: -dark-bg-color;
 }
 
-#status-label {
+.table-view .column-header-background {
+    -fx-background-color: -dark-bg-color-alt;
+}
+
+.table-cell {
+    -fx-text-fill: -dark-text-color;
+}
+
+.table-row-cell {
+    -fx-background-color: -dark-bg-color;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: -darker-bg-color;
+}
+
+.column-header {
+    -fx-background-color: -dark-box-border, -dark-inner-border, -dark-bg-color;
+    -fx-background-insets: 0px, 0px 1px 1px 0px, 1px 2px 2px 1px;
+}
+
+.table-view {
+    -fx-background-color: -darker-bg-color;
+}
+
+#status-label, .table-view > .placeholder > .label, .table-column > .label {
     -fx-text-fill: -dark-text-color;
 }
 

@@ -30,6 +30,7 @@ import javafx.beans.InvalidationListener
 import javafx.beans.Observable
 import javafx.beans.value.ObservableValue
 import javafx.event.EventHandler
+import javafx.scene.Parent
 import javafx.scene.control.Alert
 import javafx.scene.control.Dialog
 import javafx.scene.control.DialogPane
@@ -37,6 +38,7 @@ import javafx.scene.control.TextArea
 import javafx.scene.layout.Border
 import javafx.scene.layout.Region
 import javafx.scene.text.Font
+import javafx.stage.Stage
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +46,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mu.KotlinLogging
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.MethodType.methodType
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -109,5 +114,33 @@ suspend fun Throwable.openErrorDialog(title: String = "Error",
         dialog.isResizable = true
         dialog.dialogPane.setPrefSizeFromContent()
         dialog.showAndSuspend()
+    }
+}
+
+private val logger = KotlinLogging.logger { }
+
+private val SV_SHOW = try {
+    MethodHandles.lookup()
+        .findStatic(Class.forName("org.scenicview.ScenicView"), "show",
+            methodType(Void.TYPE, Parent::class.java))
+} catch (e: Exception) {
+    // handle that re-throws `e`
+    val throwing = MethodHandles.insertArguments(
+        MethodHandles.throwException(Void.TYPE, e.javaClass),
+        0, e
+    )
+    // drop the parent argument
+    MethodHandles.dropArguments(throwing, 0, Parent::class.java)
+}
+
+fun Stage.openScenicView() {
+    scene.root.openScenicView()
+}
+
+fun Parent.openScenicView() {
+    try {
+        SV_SHOW.invoke(this)
+    } catch (e: Exception) {
+        logger.debug(e) { "Failed to load ScenicView." }
     }
 }

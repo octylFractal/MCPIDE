@@ -27,9 +27,7 @@ package me.kenzierocks.mcpide.controller
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import javafx.beans.InvalidationListener
-import javafx.beans.binding.Bindings
 import javafx.beans.property.ReadOnlyProperty
-import javafx.collections.FXCollections
 import javafx.fxml.FXML
 import javafx.scene.Scene
 import javafx.scene.control.Alert
@@ -37,23 +35,17 @@ import javafx.scene.control.ButtonBar
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.Label
-import javafx.scene.control.ListView
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
-import javafx.scene.control.TableColumn
-import javafx.scene.control.TableView
 import javafx.scene.control.TreeCell
 import javafx.scene.control.TreeItem
 import javafx.scene.control.TreeView
-import javafx.scene.control.cell.PropertyValueFactory
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
-import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseButton
-import javafx.scene.layout.VBox
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
 import javafx.stage.Stage
@@ -71,7 +63,6 @@ import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
 import me.kenzierocks.mcpide.Model
 import me.kenzierocks.mcpide.Resources
-import me.kenzierocks.mcpide.SrgMapping
 import me.kenzierocks.mcpide.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
@@ -82,7 +73,6 @@ import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.OpenInFileTree
 import me.kenzierocks.mcpide.comms.RefreshOpenFiles
-import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.RetrieveDirtyStatus
 import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.SaveProject
@@ -95,14 +85,13 @@ import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
 import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.util.openScenicView
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
-import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
 import org.fxmisc.wellbehaved.event.EventPattern.mouseClicked
 import org.fxmisc.wellbehaved.event.InputHandler
-import org.fxmisc.wellbehaved.event.InputMap.consume
 import org.fxmisc.wellbehaved.event.InputMap.process
 import org.fxmisc.wellbehaved.event.Nodes
 import java.io.File
@@ -405,60 +394,13 @@ class MainController @Inject constructor(
     fun openExportableMappings() {
         viewScope.launch {
             val (_, exported) = viewComms.modelChannel.sendForResponse(RetrieveMappings)
-            val table = TableView<SrgMapping>()
-            withContext(Dispatchers.Default) {
-                table.items.setAll(exported.values)
-                table.columns.setAll(
-                    TableColumn<SrgMapping, String>("SRG Name").apply {
-                        setCellValueFactory(PropertyValueFactory("srgName"))
-                    },
-                    TableColumn<SrgMapping, String>("New Name").apply {
-                        setCellValueFactory(PropertyValueFactory("newName"))
-                    },
-                    TableColumn<SrgMapping, String>("Description").apply {
-                        setCellValueFactory(PropertyValueFactory("desc"))
-                    }
-                )
-                // Size the table in equal parts.
-                table.columns.forEach { col ->
-                    col.prefWidthProperty().bind(
-                        Bindings.divide(table.widthProperty(), table.columns.size)
-                    )
-                }
-                table.columnResizePolicy = TableView.CONSTRAINED_RESIZE_POLICY
-                // Allow deleting rows
-                Nodes.addInputMap(table, consume(keyPressed(KeyCode.DELETE)) {
-                    viewScope.launch {
-                        val toDelete = table.selectionModel.selectedItems.toList()
-                        if (toDelete.isNotEmpty() && confirmNameDelete(toDelete)) {
-                            table.items.removeAll(toDelete)
-                            sendMessage(RemoveRenames(
-                                toDelete.map { it.srgName }.toSet()
-                            ))
-                        }
-                    }
-                })
-            }
+            val (parent, controller) = fxmlFiles.exportableMappings()
+            controller.items.setAll(exported.values)
             val stage = Stage()
             stage.title = "Exportable Mappings"
-            stage.scene = Scene(
-                VBox(table), 640.0, 360.0
-            )
+            stage.scene = Scene(parent)
             stage.sizeToScene()
             stage.show()
-        }
-    }
-
-    private suspend fun confirmNameDelete(toDelete: List<SrgMapping>): Boolean {
-        val confirm = Alert(Alert.AlertType.CONFIRMATION)
-        confirm.title = "Confirm Name Deletion"
-        confirm.headerText = "Are you sure you want to delete these names?"
-        confirm.dialogPane.content = ListView(FXCollections.observableList(
-            toDelete.map { "${it.srgName}->${it.newName}" }
-        ))
-        return when (confirm.showAndSuspend()) {
-            null, ButtonType.CANCEL -> false
-            else -> true
         }
     }
 
