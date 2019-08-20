@@ -23,7 +23,7 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.inject
 
 import javax.inject.Qualifier
 
@@ -53,3 +53,12 @@ annotation class View
 @MustBeDocumented
 @Qualifier
 annotation class Srg
+
+@Target(AnnotationTarget.VALUE_PARAMETER,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Qualifier
+annotation class ProjectQ

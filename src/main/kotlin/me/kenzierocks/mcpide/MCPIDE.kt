@@ -25,19 +25,29 @@
 
 package me.kenzierocks.mcpide
 
-import dagger.BindsInstance
-import dagger.Component
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.stage.Stage
-import me.kenzierocks.mcpide.resolver.RepositorySystemModule
+import me.kenzierocks.mcpide.inject.CommsModule
+import me.kenzierocks.mcpide.inject.CoroutineSupportModule
+import me.kenzierocks.mcpide.inject.CsvModule
+import me.kenzierocks.mcpide.inject.DaggerMCPIDEComponent
+import me.kenzierocks.mcpide.inject.FxModule
+import me.kenzierocks.mcpide.inject.HttpModule
+import me.kenzierocks.mcpide.inject.JavaParserModule
+import me.kenzierocks.mcpide.inject.JsonModule
+import me.kenzierocks.mcpide.inject.MCPIDEComponent
+import me.kenzierocks.mcpide.inject.ModelModule
+import me.kenzierocks.mcpide.inject.ViewModule
+import me.kenzierocks.mcpide.inject.XmlModule
+import me.kenzierocks.mcpide.inject.ProjectComponent
+import me.kenzierocks.mcpide.inject.RepositorySystemModule
 import me.kenzierocks.mcpide.util.LineConsumer
 import me.kenzierocks.mcpide.util.LineOutputStream
 import mu.KLogger
 import mu.KotlinLogging
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
-import javax.inject.Singleton
 import kotlin.system.exitProcess
 
 class MCPIDE : Application() {
@@ -56,6 +66,8 @@ class MCPIDE : Application() {
         .xmlModule(XmlModule)
         .fxModule(FxModule)
         .mavenModule(RepositorySystemModule)
+        .parserModule(JavaParserModule)
+        .projectModule(ProjectComponent)
         .build()
 
     lateinit var stage: Stage
@@ -80,45 +92,6 @@ class MCPIDE : Application() {
         component.modelProcessing.start()
         logger.info { "Started event loops." }
     }
-}
-
-@[Singleton Component(
-    modules = [
-        CoroutineSupportModule::class,
-        CommsModule::class,
-        ViewModule::class,
-        ModelModule::class,
-        HttpModule::class,
-        CsvModule::class,
-        JsonModule::class,
-        XmlModule::class,
-        FxModule::class,
-        RepositorySystemModule::class
-    ]
-)]
-interface MCPIDEComponent {
-
-    @Component.Builder
-    interface Builder {
-        @BindsInstance
-        fun appInstance(mcpide: MCPIDE): Builder
-
-        fun coroutineSupportModule(module: CoroutineSupportModule): Builder
-        fun commsModule(module: CommsModule): Builder
-        fun viewModule(module: ViewModule): Builder
-        fun modelModule(module: ModelModule): Builder
-        fun httpModule(module: HttpModule): Builder
-        fun csvModule(module: CsvModule): Builder
-        fun jsonModule(module: JsonModule): Builder
-        fun xmlModule(module: XmlModule): Builder
-        fun fxModule(module: FxModule): Builder
-        fun mavenModule(module: RepositorySystemModule): Builder
-
-        fun build(): MCPIDEComponent
-    }
-
-    val modelProcessing: ModelProcessing
-    val fxmlFiles: FxmlFiles
 }
 
 fun main(args: Array<String>) {

@@ -37,7 +37,7 @@ import javafx.scene.input.KeyCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.SrgMapping
-import me.kenzierocks.mcpide.View
+import me.kenzierocks.mcpide.inject.View
 import me.kenzierocks.mcpide.comms.InternalizeRenames
 import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.ViewComms

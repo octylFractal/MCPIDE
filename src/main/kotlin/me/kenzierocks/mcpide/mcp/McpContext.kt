@@ -35,6 +35,7 @@ class McpContext(
     val side: String,
     val logger: KLogger
 ) {
+    var onStepChange: suspend (String) -> Unit = {}
 
     val arguments get() = runner.currentStep!!.arguments
 

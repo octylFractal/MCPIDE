@@ -25,8 +25,8 @@
 
 package me.kenzierocks.mcpide.mcp
 
+import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.mcp.function.ExecuteFunction
-import me.kenzierocks.mcpide.resolver.MavenAccess
 import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import org.eclipse.aether.artifact.DefaultArtifact
 import org.eclipse.aether.repository.RemoteRepository
@@ -41,17 +41,16 @@ class ExecuteFunctionProvider @Inject constructor(
                 data: Map<String, String>): McpFunction {
         val jsonFunc = functions[step.type]
             ?: throw IllegalArgumentException("Invalid MCP config, unknown function type: ${step.type}")
-        val jar = fetchFunction(step.type, jsonFunc)
-        return ExecuteFunction(jar, jsonFunc.jvmArgs, jsonFunc.args, data)
+        val jar = fetchFunction(step.name, jsonFunc)
+        return ExecuteFunction(step.type, step.name, jar, jsonFunc.jvmArgs, jsonFunc.args, data)
     }
 
-    private fun fetchFunction(type: String, func: McpConfig.Function): Path {
-        val artifact = mavenAccess.resolveArtifact(DefaultArtifact(gradleCoordsToMaven(func.version)),
-            listOf(func.repo).map { RemoteRepository.Builder(type, "default", func.repo).build() })
-        if (artifact.isResolved) {
-            return artifact.artifact.file.toPath()
-        }
-        throw IllegalArgumentException("No such function JAR: ${func.version} (resolving '$type')")
+    private fun fetchFunction(name: String, func: McpConfig.Function): Path {
+        return mavenAccess.resolveArtifactOrFail(
+            DefaultArtifact(gradleCoordsToMaven(func.version)),
+            listOf(func.repo).map { RemoteRepository.Builder(name, "default", func.repo).build() },
+            messageFunc = { IllegalArgumentException("No such function JAR: ${func.version} (resolving '$name')") }
+        )
     }
 
 }

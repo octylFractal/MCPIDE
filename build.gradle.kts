@@ -107,15 +107,18 @@ dependencies {
     commonLib("com.google.dagger", "dagger", "2.24") {
         "implementation"(lib())
         "kapt"(lib("compiler"))
+        "kaptTest"(lib("compiler"))
     }
 
     commonLib("net.octyl.apt-creator", "apt-creator", "0.1.4") {
         "implementation"(lib("annotations"))
         "kapt"(lib("processor"))
+        "kaptTest"(lib("processor"))
     }
 
     commonLib("org.junit.jupiter", "junit-jupiter", "5.5.1") {
         "testImplementation"(lib("api"))
+        "testImplementation"(lib("params"))
         "testRuntime"(lib("engine"))
     }
 }
@@ -132,6 +135,7 @@ javafx {
 configure<LicenseExtension> {
     include("**/*.java")
     include("**/*.kt")
+    exclude("**/JavaParserTypeSolver.kt")
 }
 
 tasks.named<Jar>("jar") {

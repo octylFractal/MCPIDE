@@ -23,11 +23,12 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.resolver
+package me.kenzierocks.mcpide.inject
 
 import dagger.Module
 import dagger.Provides
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.resolver.OkHttpWagonProvider
 import org.apache.maven.repository.internal.DefaultArtifactDescriptorReader
 import org.apache.maven.repository.internal.DefaultVersionRangeResolver
 import org.apache.maven.repository.internal.DefaultVersionResolver
@@ -52,6 +53,7 @@ import org.eclipse.aether.spi.connector.transport.TransporterFactory
 import org.eclipse.aether.spi.locator.ServiceLocator
 import org.eclipse.aether.transport.wagon.WagonProvider
 import org.eclipse.aether.transport.wagon.WagonTransporterFactory
+import java.nio.file.Path
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,9 +67,25 @@ class MavenAccess @Inject constructor(
     val session: RepositorySystemSession,
     val repositories: RemoteRepositories
 ) {
-    fun resolveArtifact(artifact: Artifact,
-                        repositories: List<RemoteRepository> = this.repositories): ArtifactResult =
+    fun resolveArtifact(
+        artifact: Artifact,
+        repositories: List<RemoteRepository> = this.repositories
+    ): ArtifactResult =
         system.resolveArtifact(session, ArtifactRequest(artifact, repositories, ""))
+
+    fun resolveArtifactOrFail(
+        artifact: Artifact,
+        repositories: List<RemoteRepository> = this.repositories,
+        messageFunc: () -> Exception = { IllegalStateException("Failed to resolve $artifact") }
+    ): Path {
+        val resolveResult = resolveArtifact(artifact, repositories)
+        if (!resolveResult.isResolved) {
+            val err = messageFunc()
+            resolveResult.exceptions.forEach(err::addSuppressed)
+            throw err
+        }
+        return resolveResult.artifact.file.toPath()
+    }
 }
 
 @Module

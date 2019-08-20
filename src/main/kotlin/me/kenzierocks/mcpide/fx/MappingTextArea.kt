@@ -25,6 +25,7 @@
 
 package me.kenzierocks.mcpide.fx
 
+import com.github.javaparser.ast.Node
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.StyledTextArea
 
@@ -49,9 +50,11 @@ open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
     }
 }
 
-val DEFAULT_MAP_STYLE = MapStyle(setOf("default-text"), null)
+val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
 
 data class MapStyle(
+    val text: String,
     val styleClasses: Collection<String>,
+    val jumpTarget: JumpTarget? = null,
     val srgName: String? = null
 )

@@ -25,6 +25,7 @@
 
 package me.kenzierocks.mcpide.comms
 
+import me.kenzierocks.mcpide.inject.ProjectComponent
 import java.nio.file.Path
 
 sealed class ViewMessage
@@ -32,6 +33,8 @@ sealed class ViewMessage
 object AskInitialMappings : ViewMessage()
 
 object AskDecompileSetup : ViewMessage()
+
+data class OpenProject(val project: ProjectComponent) : ViewMessage()
 
 data class OpenInFileTree(val directory: Path) : ViewMessage()
 

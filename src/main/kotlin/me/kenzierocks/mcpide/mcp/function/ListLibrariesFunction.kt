@@ -28,10 +28,10 @@ package me.kenzierocks.mcpide.mcp.function
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import me.kenzierocks.mcpide.data.MojangPackageManifest
+import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.mcp.McpContext
 import me.kenzierocks.mcpide.mcp.McpFunction
 import me.kenzierocks.mcpide.mcp.getStepOutput
-import me.kenzierocks.mcpide.resolver.MavenAccess
 import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import org.eclipse.aether.artifact.DefaultArtifact
 import java.nio.file.Files
@@ -53,23 +53,17 @@ class ListLibrariesFunction @Inject constructor(
         }
 
         val files = result.libraries.map {
-            val artifact = mavenAccess.resolveArtifact(
-                DefaultArtifact(gradleCoordsToMaven(it.name)))
-            when {
-                artifact.isResolved -> artifact.artifact.file
-                else -> {
-                    val e = IllegalStateException("Unable to resolve ${it.name}.")
-                    artifact.exceptions.forEach(e::addSuppressed)
-                    throw e
-                }
-            }
+            mavenAccess.resolveArtifactOrFail(
+                DefaultArtifact(gradleCoordsToMaven(it.name)),
+                messageFunc = { IllegalStateException("Unable to resolve ${it.name}.") }
+            )
         }.toSet()
 
         Files.deleteIfExists(output)
         Files.createDirectories(output.parent)
 
         Files.newBufferedWriter(output).use { writer ->
-            files.forEach { f -> writer.append("-e=").append(f.absolutePath).append('\n') }
+            files.forEach { f -> writer.append("-e=").append(f.toAbsolutePath().toString()).append('\n') }
         }
 
         return output

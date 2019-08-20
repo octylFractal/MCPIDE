@@ -42,11 +42,13 @@ import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
+import me.kenzierocks.mcpide.comms.GetAstSpans
 import me.kenzierocks.mcpide.comms.InternalizeRenames
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.MappingInfo
 import me.kenzierocks.mcpide.comms.ModelComms
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.OpenProject
 import me.kenzierocks.mcpide.comms.RefreshOpenFiles
 import me.kenzierocks.mcpide.comms.RemoveRenames
 import me.kenzierocks.mcpide.comms.Rename
@@ -58,10 +60,12 @@ import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.inject.Model
+import me.kenzierocks.mcpide.inject.Srg
 import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
 import me.kenzierocks.mcpide.mcp.McpRunnerCreator
-import me.kenzierocks.mcpide.project.ProjectCreator
+import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
 import me.kenzierocks.mcpide.util.OwnerExecutor
@@ -84,7 +88,7 @@ class ModelProcessing @Inject constructor(
     @Model
     private val workerScope: CoroutineScope,
     private val modelComms: ModelComms,
-    private val projectCreator: ProjectCreator,
+    private val projectComponentBuilder: ProjectComponent.Builder,
     private val mcpRunnerCreator: McpRunnerCreator
 ) {
     private val logger = KotlinLogging.logger { }
@@ -136,6 +140,9 @@ class ModelProcessing @Inject constructor(
                         }
                         is RetrieveDirtyStatus -> msg.responseImpl {
                             requireProjectWorker().read { dirty }
+                        }
+                        is GetAstSpans -> msg.responseImpl {
+                            requireProjectWorker().read { createAstSpans() }
                         }
                         is SaveProject -> saveProject()
                     })
@@ -217,10 +224,14 @@ class ModelProcessing @Inject constructor(
 
     private suspend fun loadProject(path: Path) {
         projectWorker?.run { channel.close() }
-        val p = projectCreator.create(path).let { proj ->
+        val projectComponent = projectComponentBuilder
+            .projectDirectory(path)
+            .build()
+        val p = projectComponent.project.let { proj ->
             workerScope.projectWorker(proj).also { projectWorker = it }
         }
         sendMessage(StatusUpdate("", "Opening project at $path"))
+        sendMessage(OpenProject(projectComponent))
         p.write {
             load()
             sendMessage(StatusUpdate("", ""))

@@ -23,7 +23,7 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.inject
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -33,6 +33,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
+import com.github.javaparser.JavaParser
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import dagger.Module
 import dagger.Provides
@@ -47,6 +48,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.runBlocking
+import me.kenzierocks.mcpide.SrgMapping
 import me.kenzierocks.mcpide.comms.ModelComms
 import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.PublishComms
@@ -197,4 +199,11 @@ object FxModule {
     fun provideFxmlLoader(controllerFactory: ControllerFactory) =
         FXMLLoader(null, null, null, controllerFactory, StandardCharsets.UTF_8)
 
+}
+
+@Module
+object JavaParserModule {
+    @Provides
+    fun provideJavaParser() : JavaParser =
+        JavaParser()
 }

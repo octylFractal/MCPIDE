@@ -33,8 +33,8 @@ package me.kenzierocks.mcpide.util
  */
 fun gradleCoordsToMaven(gradle: String): String {
     val extParts = gradle.split('@', limit = 2)
-    val extension = extParts.takeIf { it.size == 2 }?.first()
-    val rest = extParts.last()
+    val rest = extParts[0]
+    val extension = extParts.elementAtOrNull(1)
     val parts = rest.split(':', limit = 4)
     val iter = parts.iterator()
     val group = iter.takeIf { it.hasNext() }?.next()

@@ -32,7 +32,7 @@ import javafx.scene.control.MenuItem
 import javafx.scene.control.TextField
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.View
+import me.kenzierocks.mcpide.inject.View
 import java.nio.file.Path
 import javax.inject.Inject
 

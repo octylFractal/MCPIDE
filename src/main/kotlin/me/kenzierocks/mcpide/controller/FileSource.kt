@@ -37,7 +37,7 @@ import javafx.stage.Window
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
 import me.kenzierocks.mcpide.data.MavenMetadata
-import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import me.kenzierocks.mcpide.util.sortedByVersion
@@ -147,7 +147,7 @@ class MavenSource(
             null, ButtonType.CANCEL -> null
             else -> versionList.selectionModel.selectedItem
         } ?: return null // no version selected
-        return downloadArtifact(DefaultArtifact(
+        return mavenAccess.resolveArtifactOrFail(DefaultArtifact(
             group, name, "zip", ver
         ))
     }
@@ -172,13 +172,4 @@ class MavenSource(
         return metadata.versioning.version
     }
 
-    private fun downloadArtifact(artifact: Artifact): Path {
-        val result = mavenAccess.resolveArtifact(artifact)
-        if (!result.isResolved) {
-            val ex = RuntimeException("Failed to resolve $artifact")
-            result.exceptions.forEach(ex::addSuppressed)
-            throw ex
-        }
-        return result.artifact.file.toPath()
-    }
 }

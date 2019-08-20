@@ -26,7 +26,9 @@
 package me.kenzierocks.mcpide.mcp.function
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.invoke
+import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.mcp.McpContext
 import me.kenzierocks.mcpide.mcp.McpFunction
 import me.kenzierocks.mcpide.util.HashBuilding
@@ -43,11 +45,15 @@ import java.util.jar.Attributes
 import java.util.jar.JarFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.coroutineContext
 
 private val REPLACE_PATTERN = Regex("^\\{(\\w+)}$")
-private val LOG_LEVEL_PATTERN = Regex("TRACE|DEBUG|INFO|WARN|ERROR")
+private val LOG_LEVEL_PATTERN = Regex("^TRACE|DEBUG|INFO|WARN|ERROR")
 
 class ExecuteFunction(
+    private val type: String,
+    private val name: String,
     private val jar: Path,
     private val jvmArgs: List<String>,
     private var progArgs: List<String>,
@@ -122,13 +128,17 @@ class ExecuteFunction(
                         .onMalformedInput(CodingErrorAction.REPLACE)
                         .onUnmappableCharacter(CodingErrorAction.REPLACE)).useLines { lines ->
                         lines.forEach { line ->
-                            when (LOG_LEVEL_PATTERN.find(line)?.value) {
-                                "TRACE" -> context.logger.trace { line }
-                                "DEBUG" -> context.logger.debug { line }
-                                "WARN" -> context.logger.warn { line }
-                                "ERROR" -> context.logger.warn { line }
-                                else -> context.logger.info { line }
+                            val match = LOG_LEVEL_PATTERN.find(line)
+                            val modLine = match?.let { line.removePrefix("${match.value}: ") } ?: line
+                            when (match?.value) {
+                                "TRACE" -> context.logger.trace { modLine }
+                                "DEBUG" -> context.logger.debug { modLine }
+                                "WARN" -> context.logger.warn { modLine }
+                                "ERROR" -> context.logger.warn { modLine }
+                                else -> context.logger.info { modLine }
                             }
+
+                            handleMessagePassing(context, modLine)
                         }
                     }
                 }
@@ -141,6 +151,33 @@ class ExecuteFunction(
         }
 
         return output
+    }
+
+    private suspend fun handleMessagePassing(context: McpContext, line: String) {
+        val passedLine = when (type) {
+            "mcinject" -> {
+                if (line.startsWith("Processing ")) {
+                    line
+                } else {
+                    null
+                }
+            }
+            "decompile" -> {
+                if (line.startsWith(" Decompiling class")) {
+                    line.removePrefix(" ")
+                } else {
+                    null
+                }
+            }
+            else -> null
+        }
+        if (passedLine != null) {
+            // Don't slow down line processing, call this on another coroutine
+            val interceptor = coroutineContext[ContinuationInterceptor] ?: Dispatchers.Unconfined
+            GlobalScope.launch(context = interceptor) {
+                context.onStepChange("'$name': $passedLine")
+            }
+        }
     }
 
     private fun applyVariableSubstitutions(context: McpContext, list: List<String>, arguments: Map<String, Any>, inputs: MutableMap<String, Any>): List<String> {

@@ -51,11 +51,11 @@ inline fun computeOutput(input: Path, output: Path, block: () -> Unit) {
         return
     }
     block()
-    saveHashFile(input)
+    saveHashFile(input, output)
 }
 
-fun saveHashFile(input: Path) {
-    val hashFile = hashFileFor(input)
+fun saveHashFile(input: Path, output: Path) {
+    val hashFile = hashFileFor(input, output)
     Files.writeString(hashFile, hashFile(input).toString())
 }
 
@@ -63,7 +63,7 @@ fun canReuseOutput(input: Path, output: Path): Boolean {
     if (!Files.exists(output)) {
         return false
     }
-    val hashFile = hashFileFor(input)
+    val hashFile = hashFileFor(input, output)
     if (!Files.exists(hashFile)) {
         return false
     }
@@ -73,7 +73,11 @@ fun canReuseOutput(input: Path, output: Path): Boolean {
 
 private fun hashFile(input: Path): HashCode = GOOD_HASH.newHasher().putFile(input).hash()
 
-private fun hashFileFor(input: Path): Path = input.resolveSibling("${input.fileName}.sha256")
+/**
+ * Hash file location. Uses output as the "name" of the operation, to allow an input to be re-used.
+ */
+private fun hashFileFor(input: Path, output: Path): Path =
+    input.resolveSibling("${input.fileName}-${output.fileName}.sha256")
 
 object HashBuilding {
     fun StringBuilder.addEntry(key: String, value: Any): StringBuilder {

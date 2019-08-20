@@ -34,7 +34,7 @@ import java.util.zip.ZipFile
 @GenerateCreator
 class McpRunner(
     private val mcpConfigZip: Path,
-    private val config: McpConfig,
+    val config: McpConfig,
     side: String,
     private val mcpDirectory: Path,
     @Provided
@@ -77,11 +77,6 @@ class McpRunner(
      * @return the final step's output
      */
     suspend fun run(stop: String? = null, onStepChange: suspend (String) -> Unit): Path {
-        val untilMsg = when (stop) {
-            null -> ""
-            else -> " (until '$stop')"
-        }
-
         logger.info { "Setting up MCP environment" }
 
         val steps: List<McpStep> = sequence {
@@ -93,29 +88,11 @@ class McpRunner(
             }
         }.toList()
 
-        logger.info { "Initializing steps$untilMsg" }
-        ZipFile(mcpConfigZip.toFile()).use { zip ->
-            steps.forEach { step ->
-                logger.info { "> Initializing '${step.name}'" }
-                currentStep = step
-                onStepChange("Initializing '${step.name}'")
-                step.initialize(zip)
-                logger.info { "> Initialized '${step.name}'" }
-            }
-        }
-
-        logger.info { "Executing steps$untilMsg" }
-        steps.forEach { step ->
-            logger.info { "> Running '${step.name}'" }
-            currentStep = step
-            onStepChange("Running '${step.name}'")
-            step.arguments = step.arguments.mapValues { (_, v) ->
-                when (v) {
-                    is String -> replaceOutputTemplate(v)
-                    else -> v
-                }
-            }
-            step.execute()
+        context.onStepChange = onStepChange
+        try {
+            runSteps(stop, steps)
+        } finally {
+            context.onStepChange = {}
         }
 
         if (stop != null) {
@@ -125,6 +102,37 @@ class McpRunner(
         logger.info { "MCP setup complete." }
 
         return steps.last().safeOutput
+    }
+
+    private suspend fun runSteps(stop: String?, steps: List<McpStep>) {
+        val untilMsg = when (stop) {
+            null -> ""
+            else -> " (until '$stop')"
+        }
+        logger.info { "Initializing steps$untilMsg" }
+        ZipFile(mcpConfigZip.toFile()).use { zip ->
+            steps.forEach { step ->
+                logger.info { "> Initializing '${step.name}'" }
+                currentStep = step
+                context.onStepChange("Initializing '${step.name}'")
+                step.initialize(zip)
+                logger.info { "> Initialized '${step.name}'" }
+            }
+        }
+
+        logger.info { "Executing steps$untilMsg" }
+        steps.forEach { step ->
+            logger.info { "> Running '${step.name}'" }
+            currentStep = step
+            context.onStepChange("Running '${step.name}'")
+            step.arguments = step.arguments.mapValues { (_, v) ->
+                when (v) {
+                    is String -> replaceOutputTemplate(v)
+                    else -> v
+                }
+            }
+            step.execute()
+        }
     }
 
     private val outputTemplateRegex = Regex("""^\{(\w+)Output}$""")

@@ -27,35 +27,45 @@ package me.kenzierocks.mcpide.project
 
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver
 import me.kenzierocks.mcpide.Side
-import me.kenzierocks.mcpide.Srg
 import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.fx.AstSpans
+import me.kenzierocks.mcpide.fx.AstSpansCreator
+import me.kenzierocks.mcpide.inject.ProjectQ
+import me.kenzierocks.mcpide.inject.ProjectScope
+import me.kenzierocks.mcpide.inject.Srg
+import me.kenzierocks.mcpide.util.JavaParserTypeSolver
 import mu.KotlinLogging
-import net.octyl.aptcreator.GenerateCreator
-import net.octyl.aptcreator.Provided
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Reader
 import java.io.Writer
 import java.nio.charset.StandardCharsets
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import javax.inject.Inject
 
 /**
  * Class for manipulating a project. Uses no internal locking, and should either
  * have external synchronization applied or be used with [ProjectWorker].
  */
-@GenerateCreator
-class Project(
+@ProjectScope
+class Project @Inject constructor(
+    @ProjectQ
     val directory: Path,
-    @[Provided Srg]
+    @Srg
     private val srgReader: ObjectReader,
-    @[Provided Srg]
-    private val srgWriter: ObjectWriter
+    @Srg
+    private val srgWriter: ObjectWriter,
+    private val astSpansCreator: AstSpansCreator
 ) : AutoCloseable {
     private val logger = KotlinLogging.logger { }
     // Acquire project lock first.
@@ -105,6 +115,14 @@ class Project(
         initialMappings.putAll(moves)
     }
 
+    fun createAstSpans(): AstSpans {
+        val root = minecraftJarFileSystem.getPath("/")
+        val solver = CombinedTypeSolver(
+            JavaParserTypeSolver(root)
+        )
+        return astSpansCreator.create(root, JavaParserFacade.get(solver))
+    }
+
     // IO, save/load functions, work with files
 
     fun isInitializedOnDisk(): Boolean {
@@ -120,6 +138,9 @@ class Project(
             Files.newInputStream(from).use { it.copyTo(output) }
         }
     }
+
+    val minecraftJarFileSystem: FileSystem
+        get() = FileSystems.newFileSystem(minecraftJar, null)
 
     fun load() {
         loadMappings()

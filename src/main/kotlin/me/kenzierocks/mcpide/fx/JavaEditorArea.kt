@@ -25,8 +25,6 @@
 
 package me.kenzierocks.mcpide.fx
 
-import javafx.scene.control.Alert
-import javafx.scene.control.ButtonType
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +35,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.comms.GetAstSpans
+import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
@@ -44,8 +44,6 @@ import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.openErrorDialog
-import me.kenzierocks.mcpide.util.setPrefSizeFromContent
-import me.kenzierocks.mcpide.util.showAndSuspend
 import me.kenzierocks.mcpide.util.suspendUntilEqual
 import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
@@ -53,7 +51,8 @@ import net.octyl.aptcreator.Provided
 import org.fxmisc.richtext.LineNumberFactory
 import java.nio.file.Path
 
-@GenerateCreator
+@[GenerateCreator GenerateCreator.CopyAnnotations]
+@ProjectScope
 class JavaEditorArea(
     var path: Path,
     @Provided
@@ -95,7 +94,9 @@ class JavaEditorArea(
         publishComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
         try {
             val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
-            return provideHighlighting(text, mappings)
+            val symSol = publishComms.modelChannel.sendForResponse(GetAstSpans)
+            // TODO mappings
+            return symSol.highlightText(text)
         } finally {
             publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
         }

@@ -61,9 +61,9 @@ import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
-import me.kenzierocks.mcpide.Model
+import me.kenzierocks.mcpide.inject.Model
 import me.kenzierocks.mcpide.Resources
-import me.kenzierocks.mcpide.View
+import me.kenzierocks.mcpide.inject.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
@@ -72,6 +72,7 @@ import me.kenzierocks.mcpide.comms.ExportMappings
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.OpenInFileTree
+import me.kenzierocks.mcpide.comms.OpenProject
 import me.kenzierocks.mcpide.comms.RefreshOpenFiles
 import me.kenzierocks.mcpide.comms.RetrieveDirtyStatus
 import me.kenzierocks.mcpide.comms.RetrieveMappings
@@ -83,8 +84,8 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
-import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
-import me.kenzierocks.mcpide.resolver.MavenAccess
+import me.kenzierocks.mcpide.inject.ProjectComponent
+import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
@@ -113,8 +114,7 @@ class MainController @Inject constructor(
     @View
     private val viewScope: CoroutineScope,
     private val fxmlFiles: FxmlFiles,
-    private val resources: Resources,
-    private val javaEditorAreaCreator: JavaEditorAreaCreator
+    private val resources: Resources
 ) {
 
     companion object {
@@ -139,6 +139,9 @@ class MainController @Inject constructor(
     private val about: String = """MCPIDE Version ${ManifestVersion.getProjectVersion()}
                                   |Copyright © 2019 Kenzie Togami""".trimMargin()
     private var defaultDirectory: Path = Path.of(System.getProperty("user.home"))
+    private var activeProject: ProjectComponent? = null
+
+    private fun requireProject() = activeProject!!
 
     fun startEventLoop() {
         viewScope.launch {
@@ -193,6 +196,7 @@ class MainController @Inject constructor(
 
     private suspend fun handleMessage(viewMessage: ViewMessage) {
         exhaustive(when (viewMessage) {
+            is OpenProject -> activeProject = viewMessage.project
             is OpenInFileTree -> {
                 val dirTree = workerScope.async { expandDirectory(viewMessage.directory) }
                 fileTree.root = TreeItem(DirTreeEntry(null, "Loading project files..."))
@@ -257,7 +261,7 @@ class MainController @Inject constructor(
         if (existing != null && openInExisting(existing, content)) {
             return
         }
-        val editor = javaEditorAreaCreator.create(path)
+        val editor = requireProject().javaEditorAreaCreator.create(path)
         editor.replaceText("Loading...")
         editor.updateText(content)
         val tab = Tab(title, VirtualizedScrollPane(editor,
