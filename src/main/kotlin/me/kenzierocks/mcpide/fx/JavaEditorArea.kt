@@ -25,9 +25,12 @@
 
 package me.kenzierocks.mcpide.fx
 
+import javafx.scene.input.MouseButton
+import javafx.scene.input.MouseEvent
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
@@ -38,6 +41,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
+import me.kenzierocks.mcpide.comms.JumpTo
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
@@ -54,6 +58,9 @@ import org.fxmisc.richtext.LineNumberFactory
 import org.fxmisc.richtext.model.ReadOnlyStyledDocument
 import org.fxmisc.richtext.model.SimpleEditableStyledDocument
 import org.fxmisc.richtext.model.StyleSpansBuilder
+import org.fxmisc.wellbehaved.event.EventPattern
+import org.fxmisc.wellbehaved.event.InputMap.consume
+import org.fxmisc.wellbehaved.event.Nodes
 import java.nio.file.Path
 
 @[GenerateCreator GenerateCreator.CopyAnnotations]
@@ -66,16 +73,28 @@ class JavaEditorArea(
     private val astSpanMarkerCreator: AstSpanMarkerCreator
 ) : MappingTextArea() {
     private val logger = KotlinLogging.logger { }
-    private val updatesChannel = Channel<String>(Channel.BUFFERED)
+
+    private data class Update(
+        val text: String, val scrollTo: Int?
+    )
+
+    private val updatesChannel = Channel<Update>(Channel.BUFFERED)
 
     init {
+        // Jump-To hook
+        Nodes.addInputMap(this, consume(
+            EventPattern.mousePressed(MouseButton.PRIMARY)
+                .onlyIf { e -> e.clickCount == 1 && e.isShortcutDown }
+        ) { jumpTo(it) })
+
         isEditable = false
         paragraphGraphicFactory = LineNumberFactory.get(this)
         val highlightFlow = updatesChannel.consumeAsFlow()
             // If new edits while highlighting, toss out highlight result
             .mapLatest {
                 try {
-                    computeHighlighting(it)
+                    val hlight = computeHighlighting(it.text) ?: return@mapLatest null
+                    hlight to it.scrollTo
                 } catch (e: Exception) {
                     logger.warn(e) { "Highlighting error" }
                     e.openErrorDialog(
@@ -88,7 +107,12 @@ class JavaEditorArea(
             .filterNotNull()
             .flowOn(Dispatchers.Default + CoroutineName("Highlighting"))
         CoroutineScope(Dispatchers.JavaFx + CoroutineName("HighlightApplication")).launch {
-            highlightFlow.collect { highlighting -> replace(highlighting) }
+            highlightFlow.collect { (newDoc, scrollTo) ->
+                replace(newDoc)
+                scrollTo?.let {
+                    showParagraphAtTop(scrollTo)
+                }
+            }
         }
     }
 
@@ -123,8 +147,19 @@ class JavaEditorArea(
         }
     }
 
-    suspend fun updateText(text: String) {
-        updatesChannel.send(text)
+    suspend fun updateText(text: String, scrollTo: Int? = null) {
+        updatesChannel.send(Update(text, scrollTo))
+    }
+
+    private fun jumpTo(e: MouseEvent) {
+        val textIndex = hit(e.x, e.y).characterIndex.orElse(-1)
+        if (textIndex == -1) {
+            return
+        }
+        val jt = getStyleAtPosition(textIndex)?.jumpTarget ?: return
+        GlobalScope.launch {
+            publishComms.viewChannel.send(JumpTo(jt))
+        }
     }
 
     suspend fun startRename() {

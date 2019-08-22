@@ -25,6 +25,7 @@
 
 package me.kenzierocks.mcpide.comms
 
+import me.kenzierocks.mcpide.fx.JumpTarget
 import me.kenzierocks.mcpide.inject.ProjectComponent
 import java.nio.file.Path
 
@@ -37,6 +38,8 @@ object AskDecompileSetup : ViewMessage()
 data class OpenProject(val project: ProjectComponent) : ViewMessage()
 
 data class OpenInFileTree(val directory: Path) : ViewMessage()
+
+data class JumpTo(val jumpTarget: JumpTarget) : ViewMessage()
 
 object RefreshOpenFiles : ViewMessage()
 

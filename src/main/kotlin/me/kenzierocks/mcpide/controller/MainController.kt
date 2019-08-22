@@ -67,6 +67,7 @@ import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
+import me.kenzierocks.mcpide.comms.JumpTo
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.OpenInFileTree
@@ -82,6 +83,7 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
+import me.kenzierocks.mcpide.fx.JumpTarget
 import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.inject.Model
 import me.kenzierocks.mcpide.inject.ProjectComponent
@@ -207,6 +209,7 @@ class MainController @Inject constructor(
             is AskInitialMappings -> askInitialMappings()
             is StatusUpdate -> updateStatus(viewMessage)
             is RefreshOpenFiles -> refreshOpenFiles()
+            is JumpTo -> jumpTo(viewMessage.jumpTarget)
         })
     }
 
@@ -255,7 +258,7 @@ class MainController @Inject constructor(
         return currentParentNode
     }
 
-    private suspend fun openFile(path: Path) {
+    private suspend fun openFile(path: Path, scrollTo: Int? = null) {
         val title = path.fileName.toString()
         val content = withContext(Dispatchers.IO) { Files.readString(path) }
         val existing = textView.tabs.firstOrNull { it.text == title }
@@ -264,7 +267,7 @@ class MainController @Inject constructor(
         }
         val editor = requireProject().javaEditorAreaCreator.create(path)
         editor.replaceText("Loading...")
-        editor.updateText(content)
+        editor.updateText(content, scrollTo)
         val tab = Tab(title, VirtualizedScrollPane(editor,
             ScrollPane.ScrollBarPolicy.ALWAYS, ScrollPane.ScrollBarPolicy.ALWAYS))
         textView.tabs.add(tab)
@@ -284,6 +287,36 @@ class MainController @Inject constructor(
                 .map { async(context = Dispatchers.IO) { it to Files.readString(it.path) } }
                 .map { it.await() }
                 .forEach { (e, c) -> e.updateText(c) }
+        }
+    }
+
+    private suspend fun jumpTo(jumpTarget: JumpTarget) {
+        exhaustive(when (jumpTarget) {
+            is JumpTarget.Directory -> expandFileTree(jumpTarget.dir)
+            is JumpTarget.File -> openFile(jumpTarget.file, scrollTo = jumpTarget.lineNo - 1)
+        })
+    }
+
+    private fun expandFileTree(path: Path) {
+        val pathAsString = "$path"
+        var potentialNodes = listOf(fileTree.root)
+        while (true) {
+            val nodes = potentialNodes.firstOrNull { node ->
+                path.startsWith(node.value.path!!)
+            }?.let { expandThis ->
+                expandThis.isExpanded = true
+                System.err.println("Expanded: ${expandThis.value.path}, target $path")
+                // Yes, must use toString -- these paths are from different FS instances
+                when (expandThis.value.path.toString()) {
+                    pathAsString -> {
+                        // scroll to it as well
+                        fileTree.scrollTo(fileTree.getRow(expandThis))
+                        null
+                    }
+                    else -> expandThis.children
+                }
+            }
+            potentialNodes = nodes ?: break
         }
     }
 
