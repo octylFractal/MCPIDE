@@ -1,11 +1,36 @@
+/*
+ * This file is part of MCPIDE, licensed under the MIT License (MIT).
+ *
+ * Copyright (c) kenzierocks <https://kenzierocks.me>
+ * Copyright (c) contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package me.kenzierocks.mcpide.fx
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver
+import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
+import dagger.BindsInstance
 import dagger.Component
+import dagger.Subcomponent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
@@ -17,16 +42,21 @@ import me.kenzierocks.mcpide.inject.HttpModule
 import me.kenzierocks.mcpide.inject.JavaParserModule
 import me.kenzierocks.mcpide.inject.JsonModule
 import me.kenzierocks.mcpide.inject.MavenAccess
+import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.inject.RepositorySystemModule
 import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
 import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.mcp.McpTypeSolver
-import me.kenzierocks.mcpide.util.JavaParserTypeSolver
 import me.kenzierocks.mcpide.util.computeOutput
 import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import org.eclipse.aether.artifact.DefaultArtifact
+import org.fxmisc.richtext.model.ReadOnlyStyledDocument
+import org.fxmisc.richtext.model.SegmentOps
+import org.fxmisc.richtext.model.SimpleEditableStyledDocument
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.file.FileSystem
@@ -39,11 +69,10 @@ import java.util.stream.Stream
 import javax.inject.Singleton
 
 /**
- * Runs [SpansScope] logic over every file
+ * Runs [AstSpanMarker] logic over every file
  * in the MC jar. Just to be sure.
  */
-//@EnabledIfSystemProperty(named = "test.ast.spans.full", matches = "1")
-class AstSpansFullTest {
+class AstSpanMarkerFullTest {
 
     companion object {
 
@@ -53,7 +82,7 @@ class AstSpansFullTest {
                 HttpModule::class,
                 CoroutineSupportModule::class,
                 JsonModule::class,
-                JavaParserModule::class
+                TestProjectComponent.Module::class
             ]
         )
         @Singleton
@@ -61,21 +90,41 @@ class AstSpansFullTest {
             val mavenAccess: MavenAccess
             val mcpTypeSolver: McpTypeSolver
             val runnerCreator: McpRunnerCreator
-            val astSpansCreator: AstSpansCreator
             val objectMapper: ObjectMapper
+            val projectComponentBuilder: TestProjectComponent.Builder
+        }
+
+        @Subcomponent(
+            modules = [JavaParserModule::class]
+        )
+        @ProjectScope
+        interface TestProjectComponent {
+            @dagger.Module(subcomponents = [TestProjectComponent::class])
+            companion object Module
+
+            @Subcomponent.Builder
+            interface Builder {
+                @BindsInstance
+                fun typeSolver(typeSolver: TypeSolver): Builder
+
+                fun javaParserModule(javaParserModule: JavaParserModule): Builder
+
+                fun build(): TestProjectComponent
+            }
+
+            val astSpanMarkerCreator: AstSpanMarkerCreator
         }
 
         private lateinit var testComponent: TestComponent
-        private lateinit var astSpans: AstSpans
+        private lateinit var testProjectComponent: TestProjectComponent
         private lateinit var mcFs: FileSystem
 
         @JvmStatic
         @BeforeAll
         fun setUp() {
-            testComponent = DaggerAstSpansFullTest_Companion_TestComponent.builder()
+            testComponent = DaggerAstSpanMarkerFullTest_Companion_TestComponent.builder()
                 .coroutineSupportModule(CoroutineSupportModule)
                 .httpModule(HttpModule)
-                .javaParserModule(JavaParserModule)
                 .jsonModule(JsonModule)
                 .repositorySystemModule(RepositorySystemModule)
                 .build()
@@ -108,10 +157,11 @@ class AstSpansFullTest {
                     mcpRunner, mcJar, libList
                 )
             }
-            astSpans = testComponent.astSpansCreator.create(
-                mcFs.getPath("/"),
-                JavaParserFacade.get(typeSolver)
-            )
+
+            testProjectComponent = testComponent.projectComponentBuilder
+                .typeSolver(typeSolver)
+                .javaParserModule(JavaParserModule)
+                .build()
         }
 
         private fun readMinecraftJar(root: Path, zip: Path, messageActor: SendChannel<String>, mcpRunner: McpRunner): Path {
@@ -150,13 +200,22 @@ class AstSpansFullTest {
 
     @ParameterizedTest
     @MethodSource("everyFile")
+    @EnabledIfSystemProperty(named = "test.ast.spans.full", matches = "1")
     fun passesEveryFile(path: Path) {
         try {
-            val result = astSpans.highlightText(Files.readString(path))
-            println("### $path")
-            println(result.newText)
+            val doc: JeaDoc = SimpleEditableStyledDocument(
+                setOf(), DEFAULT_MAP_STYLE
+            )
+            doc.replace(0, 0, ReadOnlyStyledDocument.fromString(
+                Files.readString(path), setOf(), DEFAULT_MAP_STYLE, SegmentOps.styledTextOps()
+            ))
+
+            val astSpans = testProjectComponent.astSpanMarkerCreator.create(
+                mcFs.getPath("/"), doc
+            )
+            astSpans.markAst()
         } catch (e: Exception) {
-            keepProviding.set(false)
+            assumeTrue(keepProviding.getAndSet(false))
             throw e
         }
     }

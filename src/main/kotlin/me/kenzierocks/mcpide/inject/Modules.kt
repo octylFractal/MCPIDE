@@ -34,6 +34,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
 import com.github.javaparser.JavaParser
+import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import dagger.Module
 import dagger.Provides
@@ -60,6 +61,7 @@ import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.util.OwnerExecutor
 import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.typesolve.NodeTypeFinder
 import mu.KotlinLogging
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -203,7 +205,11 @@ object FxModule {
 
 @Module
 object JavaParserModule {
+
     @Provides
-    fun provideJavaParser() : JavaParser =
-        JavaParser()
+    @ProjectScope
+    fun provideNodeTypeFinder(typeSolver: TypeSolver) = NodeTypeFinder(typeSolver)
+
+    @Provides
+    fun provideJavaParser(): JavaParser = JavaParser()
 }

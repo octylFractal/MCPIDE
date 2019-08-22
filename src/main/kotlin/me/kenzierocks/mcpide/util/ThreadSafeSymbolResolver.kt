@@ -23,37 +23,30 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.fx
+package me.kenzierocks.mcpide.util
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.ast.Node
+import com.github.javaparser.ast.expr.Expression
+import com.github.javaparser.ast.type.Type
+import com.github.javaparser.resolution.SymbolResolver
+import com.github.javaparser.resolution.types.ResolvedType
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
-) {
-    init {
-        styleClass.add("code-area")
+/* TODO we should probably just clone JavaSymbolSolver and make the JPF instances per-thread,
+    that way there's not a huge bottleneck */
+class ThreadSafeSymbolResolver(
+    private val delegate: SymbolResolver
+) : SymbolResolver {
 
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
+    /**
+     * Thread-lock around everything to prevent issues with JavaParserFacade.
+     */
+    private val lock = ReentrantLock()
 
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
-    }
+    override fun calculateType(expression: Expression?): ResolvedType? = lock.withLock { delegate.calculateType(expression) }
+
+    override fun <T : Any?> toResolvedType(javaparserType: Type?, resultClass: Class<T>?): T = lock.withLock { delegate.toResolvedType(javaparserType, resultClass) }
+
+    override fun <T : Any?> resolveDeclaration(node: Node?, resultClass: Class<T>?): T = lock.withLock { delegate.resolveDeclaration(node, resultClass) }
 }
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)

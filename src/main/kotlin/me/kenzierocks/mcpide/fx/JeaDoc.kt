@@ -25,35 +25,18 @@
 
 package me.kenzierocks.mcpide.fx
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.JavaToken
+import com.github.javaparser.Position
+import me.kenzierocks.mcpide.util.requireRange
+import org.fxmisc.richtext.model.EditableStyledDocument
 
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
-) {
-    init {
-        styleClass.add("code-area")
+typealias JeaDoc = EditableStyledDocument<Collection<String>, String, MapStyle>
 
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
-
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
-    }
+fun JeaDoc.offset(pos: Position): Int {
+    return position(pos.line - 1, pos.column - 1).toOffset()
 }
 
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)
+fun JeaDoc.offsets(token: JavaToken): IntRange {
+    val range = token.requireRange()
+    return offset(range.begin)..offset(range.end)
+}

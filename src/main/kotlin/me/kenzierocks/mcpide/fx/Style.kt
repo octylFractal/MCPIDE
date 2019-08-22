@@ -25,35 +25,13 @@
 
 package me.kenzierocks.mcpide.fx
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
-
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
+enum class Style(
+    val styleClass: String
 ) {
-    init {
-        styleClass.add("code-area")
-
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
-
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
-    }
+    DEFAULT_TEXT("default-text"),
+    COMMENT("comment"),
+    IDENTIFIER("identifier"),
+    KEYWORD("keyword"),
+    STRING_LITERAL("string-literal"),
+    OTHER_LITERAL("other-literal"),
 }
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)

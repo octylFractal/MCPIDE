@@ -25,30 +25,38 @@
 
 package me.kenzierocks.mcpide.fx
 
+import com.github.javaparser.StringProvider
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.comms.GetAstSpans
-import me.kenzierocks.mcpide.inject.ProjectScope
+import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.sendForResponse
+import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.openErrorDialog
+import me.kenzierocks.mcpide.util.produceTokens
 import me.kenzierocks.mcpide.util.suspendUntilEqual
 import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
 import org.fxmisc.richtext.LineNumberFactory
+import org.fxmisc.richtext.model.ReadOnlyStyledDocument
+import org.fxmisc.richtext.model.SimpleEditableStyledDocument
+import org.fxmisc.richtext.model.StyleSpansBuilder
 import java.nio.file.Path
 
 @[GenerateCreator GenerateCreator.CopyAnnotations]
@@ -56,7 +64,9 @@ import java.nio.file.Path
 class JavaEditorArea(
     var path: Path,
     @Provided
-    private val publishComms: PublishComms
+    private val publishComms: PublishComms,
+    @Provided
+    private val astSpanMarkerCreator: AstSpanMarkerCreator
 ) : MappingTextArea() {
     private val logger = KotlinLogging.logger { }
     private val updatesChannel = Channel<String>(Channel.BUFFERED)
@@ -78,25 +88,41 @@ class JavaEditorArea(
                     null
                 }
             }
+            .filterNotNull()
             .flowOn(Dispatchers.Default + CoroutineName("Highlighting"))
         CoroutineScope(Dispatchers.JavaFx + CoroutineName("HighlightApplication")).launch {
-            highlightFlow.collect { highlighting ->
-                // Verify spans are valid, then apply.
-                if (highlighting != null) {
-                    this@JavaEditorArea.replaceText(highlighting.newText)
-                    setStyleSpans(0, highlighting.spans)
-                }
-            }
+            highlightFlow.collect { highlighting -> replace(highlighting) }
         }
     }
 
-    private suspend fun computeHighlighting(text: String): Highlighting? {
+    private suspend fun computeHighlighting(text: String): JeaDoc {
         publishComms.viewChannel.send(StatusUpdate("Highlighting", "In Progress..."))
         try {
             val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
-            val symSol = publishComms.modelChannel.sendForResponse(GetAstSpans)
-            // TODO mappings
-            return symSol.highlightText(text)
+            val jarRoot = publishComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
+
+            return coroutineScope {
+                val tokens = produceTokens(StringProvider(text))
+                val styles = tokens.consumeAsFlow()
+                    .remap(mappings).toList()
+
+                // Create new document with appropriate styles
+                val doc = SimpleEditableStyledDocument(
+                    initialParagraphStyle, initialTextStyle
+                )
+                doc.replace(0, 0, ReadOnlyStyledDocument.fromString(
+                    styles.joinToString("") { it.text }, initialParagraphStyle, initialTextStyle, segOps
+                ))
+                val styleSpans = styles
+                    .fold(StyleSpansBuilder<MapStyle>()) { acc, next -> acc.add(next, next.text.length) }
+                    .create()
+                doc.setStyleSpans(0, styleSpans)
+
+                val symSol = astSpanMarkerCreator.create(jarRoot, doc)
+                symSol.markAst()
+
+                doc
+            }
         } finally {
             publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
         }

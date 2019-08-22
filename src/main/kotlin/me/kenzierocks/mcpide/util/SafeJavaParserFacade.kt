@@ -23,37 +23,26 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.fx
+package me.kenzierocks.mcpide.util
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
+import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
+class SafeJavaParserFacade(
+    typeSolver: TypeSolver
 ) {
-    init {
-        styleClass.add("code-area")
 
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
-
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
+    private val lock = ReentrantLock()
+    private val localJpf = ThreadLocal.withInitial {
+        lock.withLock {
+            JavaParserFacade.get(typeSolver).also {
+                JavaParserFacade.clearInstances()
+            }
+        }
     }
+
+    fun get(): JavaParserFacade = localJpf.get()
+
 }
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)

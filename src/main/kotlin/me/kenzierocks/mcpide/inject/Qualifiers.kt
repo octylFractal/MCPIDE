@@ -62,3 +62,12 @@ annotation class Srg
 @MustBeDocumented
 @Qualifier
 annotation class ProjectQ
+
+@Target(AnnotationTarget.VALUE_PARAMETER,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Qualifier
+annotation class JarRoot

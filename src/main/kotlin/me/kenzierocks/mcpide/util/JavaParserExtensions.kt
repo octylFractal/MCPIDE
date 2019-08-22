@@ -23,37 +23,16 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.fx
+package me.kenzierocks.mcpide.util
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.JavaToken
+import com.github.javaparser.ast.Node
 
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
-) {
-    init {
-        styleClass.add("code-area")
+fun JavaToken.requireRange() = requireNotNull(range.orElse(null)) { "No range for token" }
 
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
+val Node.tokens: Iterable<JavaToken>
+    get() = tokenRange.map<Iterable<JavaToken>> { it }.orElseGet { emptyList() }
 
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
-    }
-}
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)
+fun Node.findTokenFor(tokenText: String) =
+    tokens.firstOrNull { it.text == tokenText }
+        ?: throw IllegalStateException("Missing $tokenText in $this")

@@ -25,35 +25,27 @@
 
 package me.kenzierocks.mcpide.fx
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.GeneratedJavaParserConstants
+import com.github.javaparser.Token
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import me.kenzierocks.mcpide.comms.MappingInfo
+import me.kenzierocks.mcpide.detectSrgType
 
 /**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
+ * Given some text, tokenize it, replace names (not updating positioning), and produce a stream of styles.
  */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
-) {
-    init {
-        styleClass.add("code-area")
-
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
-
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
+fun Flow<Token>.remap(
+    mappingInfo: MappingInfo
+): Flow<MapStyle> {
+    return this.map { token ->
+        if (token.kind == GeneratedJavaParserConstants.IDENTIFIER) {
+            if (token.image?.detectSrgType() != null) {
+                val newName = (mappingInfo.mappings[token.image] ?: mappingInfo.exported[token.image])?.newName
+                    ?: token.image
+                return@map DEFAULT_MAP_STYLE.copy(text = newName, srgName = token.image)
+            }
+        }
+        DEFAULT_MAP_STYLE.copy(text = token.image)
     }
 }
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)

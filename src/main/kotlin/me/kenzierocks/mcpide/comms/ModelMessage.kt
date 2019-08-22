@@ -25,12 +25,10 @@
 
 package me.kenzierocks.mcpide.comms
 
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.SendChannel
 import me.kenzierocks.mcpide.SrgMapping
-import me.kenzierocks.mcpide.fx.AstSpans
 import java.nio.file.Path
 import kotlin.coroutines.coroutineContext
 
@@ -95,8 +93,8 @@ class RetrieveDirtyStatus(parent: Job? = null) : RespondingModelMessage<Boolean>
     }
 }
 
-class GetAstSpans(parent: Job? = null) : RespondingModelMessage<AstSpans>(parent) {
-    companion object Constructor : RMMConstructor<AstSpans, GetAstSpans> {
-        override operator fun invoke(parent: Job?) = GetAstSpans(parent)
+class GetMinecraftJarRoot(parent: Job? = null) : RespondingModelMessage<Path>(parent) {
+    companion object Constructor : RMMConstructor<Path, GetMinecraftJarRoot> {
+        override operator fun invoke(parent: Job?) = GetMinecraftJarRoot(parent)
     }
 }

@@ -25,35 +25,27 @@
 
 package me.kenzierocks.mcpide.fx
 
-import org.fxmisc.richtext.CodeArea
-import org.fxmisc.richtext.StyledTextArea
+import com.github.javaparser.ast.Node
 
-/**
- * TextArea with SRG mappings backing some sections of text.
- *
- * Based on [CodeArea].
- */
-open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
-    setOf(), { textFlow, styleClasses -> textFlow.styleClass.addAll(styleClasses) },
-    DEFAULT_MAP_STYLE, { textExt, style -> textExt.styleClass.addAll(style.styleClasses) },
-    false
-) {
-    init {
-        styleClass.add("code-area")
+typealias NodeMarker<N> = N.() -> Unit
 
-        // load the default style that defines a fixed-width font
-        stylesheets.add(CodeArea::class.java.getResource("code-area.css").toExternalForm())
+val NO_OP: NodeMarker<Node> = {}
 
-        // don't apply preceding style to typed text
-        useInitialStyleForInsertion = true
+class NodeMarkTable {
+    private val map = mutableMapOf<Class<out Node>, NodeMarker<Node>>()
+
+    operator fun <N : Node> get(clazz: Class<N>): NodeMarker<N>? {
+        return map[clazz]
+    }
+
+    inline fun <reified N : Node> get(): NodeMarker<N>? = this[N::class.java]
+
+    operator fun <N : Node> set(clazz: Class<N>, block: NodeMarker<N>) {
+        @Suppress("UNCHECKED_CAST")
+        map[clazz] = block as NodeMarker<Node>
+    }
+
+    inline fun <reified N : Node> add(noinline block: NodeMarker<N>) {
+        this[N::class.java] = block
     }
 }
-
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
-
-data class MapStyle(
-    val text: String,
-    val styleClasses: Collection<String>,
-    val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
-)

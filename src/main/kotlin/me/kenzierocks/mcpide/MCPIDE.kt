@@ -34,14 +34,13 @@ import me.kenzierocks.mcpide.inject.CsvModule
 import me.kenzierocks.mcpide.inject.DaggerMCPIDEComponent
 import me.kenzierocks.mcpide.inject.FxModule
 import me.kenzierocks.mcpide.inject.HttpModule
-import me.kenzierocks.mcpide.inject.JavaParserModule
 import me.kenzierocks.mcpide.inject.JsonModule
 import me.kenzierocks.mcpide.inject.MCPIDEComponent
 import me.kenzierocks.mcpide.inject.ModelModule
-import me.kenzierocks.mcpide.inject.ViewModule
-import me.kenzierocks.mcpide.inject.XmlModule
 import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.inject.RepositorySystemModule
+import me.kenzierocks.mcpide.inject.ViewModule
+import me.kenzierocks.mcpide.inject.XmlModule
 import me.kenzierocks.mcpide.util.LineConsumer
 import me.kenzierocks.mcpide.util.LineOutputStream
 import mu.KLogger
@@ -66,7 +65,6 @@ class MCPIDE : Application() {
         .xmlModule(XmlModule)
         .fxModule(FxModule)
         .mavenModule(RepositorySystemModule)
-        .parserModule(JavaParserModule)
         .projectModule(ProjectComponent)
         .build()
 

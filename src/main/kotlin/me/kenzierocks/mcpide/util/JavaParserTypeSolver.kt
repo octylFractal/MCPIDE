@@ -17,25 +17,29 @@
 package me.kenzierocks.mcpide.util
 
 import com.github.javaparser.JavaParser
-import com.github.javaparser.ParseStart.COMPILATION_UNIT
 import com.github.javaparser.ParserConfiguration
 import com.github.javaparser.ParserConfiguration.LanguageLevel.BLEEDING_EDGE
-import com.github.javaparser.Providers.provider
 import com.github.javaparser.ast.CompilationUnit
+import com.github.javaparser.ast.body.TypeDeclaration
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration
-import com.github.javaparser.symbolsolver.javaparser.Navigator
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
 import com.github.javaparser.symbolsolver.model.resolution.SymbolReference
 import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
 import com.google.common.cache.CacheBuilder
-import java.io.FileNotFoundException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.receiveOrNull
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.util.ArrayList
 import java.util.Optional
 import java.util.concurrent.ExecutionException
-import java.util.stream.Collectors
-import java.util.stream.Stream
 
 private val DEFAULT_PARSER_CONFIGURATION = ParserConfiguration().apply {
     languageLevel = BLEEDING_EDGE
@@ -52,8 +56,9 @@ private val DEFAULT_PARSER_CONFIGURATION = ParserConfiguration().apply {
 class JavaParserTypeSolver constructor(
     private val srcDir: Path,
     parserConfiguration: ParserConfiguration = DEFAULT_PARSER_CONFIGURATION
-) : TypeSolver {
-    private val javaParser: JavaParser
+) : TypeSolver, CoroutineScope by CoroutineScope(
+    Dispatchers.Unconfined + CoroutineName("JavaParserTypeSolver") + SupervisorJob()
+) {
 
     private var parent: TypeSolver? = null
 
@@ -61,11 +66,40 @@ class JavaParserTypeSolver constructor(
     private val parsedDirectories = CacheBuilder.newBuilder().softValues().build<Path, List<CompilationUnit>>()
     private val foundTypes = CacheBuilder.newBuilder().softValues().build<String, SymbolReference<ResolvedReferenceTypeDeclaration>>()
 
+    private data class Parse(
+        val file: Path,
+        val parent: Job?
+    ) {
+        val result: CompletableDeferred<CompilationUnit?> = CompletableDeferred(parent)
+    }
+
+    private suspend fun awaitParse(path: Path): CompilationUnit? {
+        return Parse(path, coroutineContext[Job]).run {
+            parserActor.send(this)
+            result.await()
+        }
+    }
+
+    private val parserActor = actor<Parse> {
+        val javaParser = JavaParser(parserConfiguration)
+
+        while (!channel.isClosedForReceive) {
+            val task = channel.receiveOrNull() ?: break
+            try {
+                val result = javaParser.parse(task.file)
+                task.result.complete(result.result.orElse(null))
+            } catch (e: NoSuchFileException) {
+                task.result.complete(null)
+            } catch (e: Exception) {
+                task.result.completeExceptionally(e)
+            }
+        }
+    }
+
     init {
         if (!Files.exists(srcDir) || !Files.isDirectory(srcDir)) {
             throw IllegalStateException("SrcDir does not exist or is not a directory: $srcDir")
         }
-        javaParser = JavaParser(parserConfiguration)
     }
 
     override fun toString(): String {
@@ -86,16 +120,7 @@ class JavaParserTypeSolver constructor(
     private fun parse(srcFile: Path): Optional<CompilationUnit> {
         try {
             return parsedFiles.get(srcFile.toAbsolutePath()) {
-                try {
-                    when {
-                        Files.isRegularFile(srcFile) -> javaParser.parse(COMPILATION_UNIT, provider(srcFile))
-                            .result
-                            .map { cu -> cu.setStorage(srcFile) }
-                        else -> Optional.empty()
-                    }
-                } catch (e: FileNotFoundException) {
-                    throw RuntimeException("Issue while parsing while type solving: " + srcFile.toAbsolutePath(), e)
-                }
+                Optional.ofNullable(runBlocking { awaitParse(srcFile) })
             }
         } catch (e: ExecutionException) {
             throw RuntimeException(e)
@@ -103,11 +128,7 @@ class JavaParserTypeSolver constructor(
 
     }
 
-    private fun parseDirectoryRecursively(srcDirectory: Path): List<CompilationUnit> {
-        return parseDirectory(srcDirectory, true)
-    }
-
-    private fun parseDirectory(srcDirectory: Path, recursively: Boolean = false): List<CompilationUnit> {
+    private fun parseDirectory(srcDirectory: Path): List<CompilationUnit> {
         try {
             return parsedDirectories.get(srcDirectory.toAbsolutePath()) {
                 if (Files.exists(srcDirectory)) {
@@ -116,8 +137,6 @@ class JavaParserTypeSolver constructor(
                             .flatMap { file ->
                                 return@flatMap if (file.fileName.toString().toLowerCase().endsWith(".java")) {
                                     parse(file).map { listOf(it) }.orElseGet(::emptyList)
-                                } else if (recursively && file.toFile().isDirectory) {
-                                    parseDirectoryRecursively(file)
                                 } else {
                                     emptyList()
                                 }
@@ -151,6 +170,17 @@ class JavaParserTypeSolver constructor(
 
     }
 
+    private fun findType(decls: List<TypeDeclaration<*>>, name: String): TypeDeclaration<*>? {
+        val parts = name.split('.', limit = 2)
+
+        return decls.firstOrNull { it.nameAsString == parts[0] }?.let { first ->
+            when {
+                parts.size == 1 -> first
+                else -> findType(first.members.filterIsInstance<TypeDeclaration<*>>(), parts[1])
+            }
+        }
+    }
+
     private fun resolveJavaFile(parts: List<String>): Path {
         var path = srcDir
         parts.dropLast(1).forEach { part ->
@@ -169,24 +199,21 @@ class JavaParserTypeSolver constructor(
 
             // As an optimization we first try to look in the canonical position where we expect to find the file
             run {
-                val compilationUnit = parse(filePath)
-                if (compilationUnit.isPresent) {
-                    val astTypeDeclaration = Navigator.findType(compilationUnit.get(), typeName)
-                    if (astTypeDeclaration.isPresent) {
-                        return SymbolReference.solved(JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()))
-                    }
+                val found = parse(filePath)
+                    .map { findType(it.types, typeName) }
+                if (found.isPresent) {
+                    return SymbolReference.solved(JavaParserFacade.get(this).getTypeDeclaration(found.get()))
                 }
             }
 
             // If this is not possible we parse all files
             // We try just in the same package, for classes defined in a file not named as the class itself
             run {
-                val compilationUnits = parseDirectory(filePath.parent)
-                for (compilationUnit in compilationUnits) {
-                    val astTypeDeclaration = Navigator.findType(compilationUnit, typeName)
-                    if (astTypeDeclaration.isPresent) {
-                        return SymbolReference.solved(JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()))
-                    }
+                val found = parseDirectory(filePath.parent)
+                    .mapNotNull { findType(it.types, typeName) }
+                    .firstOrNull()
+                if (found != null) {
+                    return SymbolReference.solved(JavaParserFacade.get(this).getTypeDeclaration(found))
                 }
             }
         }
@@ -195,7 +222,3 @@ class JavaParserTypeSolver constructor(
     }
 
 }
-/**
- * Note that this parse only files directly contained in this directory.
- * It does not traverse recursively all children directory.
- */

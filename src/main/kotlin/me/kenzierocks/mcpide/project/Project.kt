@@ -27,16 +27,11 @@ package me.kenzierocks.mcpide.project
 
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver
 import me.kenzierocks.mcpide.Side
 import me.kenzierocks.mcpide.SrgMapping
-import me.kenzierocks.mcpide.fx.AstSpans
-import me.kenzierocks.mcpide.fx.AstSpansCreator
 import me.kenzierocks.mcpide.inject.ProjectQ
 import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.inject.Srg
-import me.kenzierocks.mcpide.util.JavaParserTypeSolver
 import mu.KotlinLogging
 import java.io.InputStreamReader
 import java.io.OutputStream
@@ -64,8 +59,7 @@ class Project @Inject constructor(
     @Srg
     private val srgReader: ObjectReader,
     @Srg
-    private val srgWriter: ObjectWriter,
-    private val astSpansCreator: AstSpansCreator
+    private val srgWriter: ObjectWriter
 ) : AutoCloseable {
     private val logger = KotlinLogging.logger { }
     // Acquire project lock first.
@@ -113,14 +107,6 @@ class Project @Inject constructor(
         val moves = srgNames.mapNotNull { exportedMappings.remove(it) }.map { it.srgName to it }
         dirty = dirty || moves.isNotEmpty()
         initialMappings.putAll(moves)
-    }
-
-    fun createAstSpans(): AstSpans {
-        val root = minecraftJarFileSystem.getPath("/")
-        val solver = CombinedTypeSolver(
-            JavaParserTypeSolver(root)
-        )
-        return astSpansCreator.create(root, JavaParserFacade.get(solver))
     }
 
     // IO, save/load functions, work with files

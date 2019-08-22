@@ -42,7 +42,7 @@ import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
-import me.kenzierocks.mcpide.comms.GetAstSpans
+import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
 import me.kenzierocks.mcpide.comms.InternalizeRenames
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.MappingInfo
@@ -61,11 +61,11 @@ import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.inject.Model
+import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.inject.Srg
 import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
 import me.kenzierocks.mcpide.mcp.McpRunnerCreator
-import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
 import me.kenzierocks.mcpide.util.OwnerExecutor
@@ -141,8 +141,8 @@ class ModelProcessing @Inject constructor(
                         is RetrieveDirtyStatus -> msg.responseImpl {
                             requireProjectWorker().read { dirty }
                         }
-                        is GetAstSpans -> msg.responseImpl {
-                            requireProjectWorker().read { createAstSpans() }
+                        is GetMinecraftJarRoot -> msg.responseImpl {
+                            requireProjectWorker().read { minecraftJarFileSystem.getPath("/") }
                         }
                         is SaveProject -> saveProject()
                     })
