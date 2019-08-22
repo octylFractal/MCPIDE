@@ -29,14 +29,20 @@ import com.github.javaparser.JavaToken
 import com.github.javaparser.Position
 import me.kenzierocks.mcpide.util.requireRange
 import org.fxmisc.richtext.model.EditableStyledDocument
+import org.fxmisc.richtext.model.StyledDocument
 
 typealias JeaDoc = EditableStyledDocument<Collection<String>, String, MapStyle>
 
-fun JeaDoc.offset(pos: Position): Int {
+fun StyledDocument<*, *, *>.offset(pos: Position): Int {
     return position(pos.line - 1, pos.column - 1).toOffset()
 }
 
-fun JeaDoc.offsets(token: JavaToken): IntRange {
+fun StyledDocument<*, *, *>.offsets(token: JavaToken): IntRange {
     val range = token.requireRange()
     return offset(range.begin)..offset(range.end)
+}
+
+inline fun JeaDoc.updateStyle(range: IntRange, copyImpl: MapStyle.() -> MapStyle) {
+    val originalStyle = getStyleSpans(range.first, range.last + 1).single().style
+    setStyle(range.first, range.last + 1, originalStyle.copyImpl())
 }

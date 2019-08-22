@@ -29,9 +29,12 @@ import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
 import me.kenzierocks.mcpide.Side
 import me.kenzierocks.mcpide.SrgMapping
+import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.inject.ProjectQ
 import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.inject.Srg
+import me.kenzierocks.mcpide.mcp.McpRunner
+import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import mu.KotlinLogging
 import java.io.InputStreamReader
 import java.io.OutputStream
@@ -59,7 +62,9 @@ class Project @Inject constructor(
     @Srg
     private val srgReader: ObjectReader,
     @Srg
-    private val srgWriter: ObjectWriter
+    private val srgWriter: ObjectWriter,
+    private val mcpRunnerCreator: McpRunnerCreator,
+    private val fileCache: FileCache
 ) : AutoCloseable {
     private val logger = KotlinLogging.logger { }
     // Acquire project lock first.
@@ -71,6 +76,7 @@ class Project @Inject constructor(
 
     private val srgMappingsFile: Path = directory.resolve("srg-mappings.csv.gz")
     private val exportsFile: Path = directory.resolve("srg-exports.csv.gz")
+    private val mcpConfigZip: Path = directory.resolve("mcp_config.zip")
     val minecraftJar: Path = directory.resolve("minecraft.jar")
     val initialMappings = LinkedHashMap<String, SrgMapping>()
     val exportedMappings = LinkedHashMap<String, SrgMapping>()
@@ -119,6 +125,8 @@ class Project @Inject constructor(
 
     fun hasMinecraftJar() = Files.exists(minecraftJar)
 
+    fun hasMcpConfig() = Files.exists(mcpConfigZip)
+
     fun copyMinecraftJar(from: Path) {
         safeWrite(minecraftJar) { output ->
             Files.newInputStream(from).use { it.copyTo(output) }
@@ -127,6 +135,20 @@ class Project @Inject constructor(
 
     val minecraftJarFileSystem: FileSystem
         get() = FileSystems.newFileSystem(minecraftJar, null)
+
+    fun copyMcpConfigZip(from: Path) {
+        safeWrite(mcpConfigZip) { output ->
+            Files.newInputStream(from).use { it.copyTo(output) }
+        }
+    }
+
+    fun newMcpRunner() : McpRunner {
+        return mcpRunnerCreator.create(
+            mcpConfigZip,
+            "joined",
+            fileCache.mcpWorkDirectory.resolve(mcpConfigZip.fileName.toString().substringBefore(".zip"))
+        )
+    }
 
     fun load() {
         loadMappings()

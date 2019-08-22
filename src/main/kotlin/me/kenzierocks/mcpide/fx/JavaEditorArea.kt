@@ -25,7 +25,6 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.github.javaparser.StringProvider
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +35,6 @@ import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
@@ -48,7 +46,6 @@ import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.openErrorDialog
-import me.kenzierocks.mcpide.util.produceTokens
 import me.kenzierocks.mcpide.util.suspendUntilEqual
 import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
@@ -102,9 +99,7 @@ class JavaEditorArea(
             val jarRoot = publishComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
 
             return coroutineScope {
-                val tokens = produceTokens(StringProvider(text))
-                val styles = tokens.consumeAsFlow()
-                    .remap(mappings).toList()
+                val styles = remap(text, mappings)
 
                 // Create new document with appropriate styles
                 val doc = SimpleEditableStyledDocument(

@@ -25,6 +25,9 @@
 
 package me.kenzierocks.mcpide.mcp
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import me.kenzierocks.mcpide.util.requireEntry
 import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
@@ -34,15 +37,22 @@ import java.util.zip.ZipFile
 @GenerateCreator
 class McpRunner(
     private val mcpConfigZip: Path,
-    val config: McpConfig,
     side: String,
     private val mcpDirectory: Path,
     @Provided
     private val builtInFunctionProvider: BuiltInFunctionProvider,
     @Provided
-    private val executeFunctionProvider: ExecuteFunctionProvider
+    private val executeFunctionProvider: ExecuteFunctionProvider,
+    @Provided
+    private val jsonMapper: ObjectMapper
 ) {
     private val logger = KotlinLogging.logger("MCPOutput")
+
+    val config = ZipFile(mcpConfigZip.toFile()).use { zip ->
+        zip.getInputStream(zip.requireEntry("config.json")).use { eis ->
+            jsonMapper.readValue<McpConfig>(eis)
+        }
+    }
 
     private val context = McpContext(this, config.version, side, logger)
 

@@ -30,7 +30,10 @@ enum class Style(
 ) {
     DEFAULT_TEXT("default-text"),
     COMMENT("comment"),
-    IDENTIFIER("identifier"),
+    TYPE_IDENTIFIER("type-identifier"),
+    FIELD_IDENTIFIER("field-identifier"),
+    METHOD_IDENTIFIER("method-identifier"),
+    OTHER_IDENTIFIER("other-identifier"),
     KEYWORD("keyword"),
     STRING_LITERAL("string-literal"),
     OTHER_LITERAL("other-literal"),

@@ -130,9 +130,18 @@ class AstSpanMarker(
     private val nodeTypeFinder: NodeTypeFinder
 ) {
     fun markAst() {
-        // TODO report errors
-        val node = javaParser.parse(jeaDoc.text).result.get()
-        markNode(node)
+        val result = javaParser.parse(jeaDoc.text)
+        result.result.filter { it.parsed == Node.Parsedness.PARSED }.ifPresentOrElse({
+            markNode(it)
+        }) {
+            val error = RuntimeException("Error parsing Java")
+            result.problems.forEach { p ->
+                error.addSuppressed(p.cause.orElseGet {
+                    RuntimeException(p.verboseMessage)
+                })
+            }
+            throw error
+        }
     }
 
     private fun markToken(
@@ -144,10 +153,9 @@ class AstSpanMarker(
     private fun markRange(
         range: IntRange, style: Style, jumpTarget: JumpTarget? = null
     ) {
-        val originalStyle = jeaDoc.getStyleSpans(range.first, range.last).single().style
-        jeaDoc.setStyle(range.first, range.last, originalStyle.copy(
-            styleClasses = setOf(style.styleClass), jumpTarget = jumpTarget
-        ))
+        jeaDoc.updateStyle(range) {
+            copy(styleClasses = setOf(style.styleClass), jumpTarget = jumpTarget)
+        }
     }
 
     /**
@@ -179,15 +187,15 @@ class AstSpanMarker(
             )
         }.drop((diff - 1).coerceAtLeast(0)).toList() + jt
         nameSplit.zip(jumpTargets).forEach { (p, jt) ->
-            markToken(p, Style.IDENTIFIER, jt)
+            markToken(p, Style.TYPE_IDENTIFIER, jt)
         }
     }
 
-    private fun markSimpleName(name: SimpleName, fqn: String? = null) {
+    private fun markSimpleName(name: SimpleName, style: Style, fqn: String? = null) {
         val jt = fqn?.let {
             jumpTargetResolver.resolveJumpTarget(root, fqn, nameIsPackage = false)
         }
-        markToken(name.tokens.single(), Style.IDENTIFIER, jt)
+        markToken(name.tokens.single(), style, jt)
     }
 
     private fun markNode(node: Optional<out Node>) {
@@ -241,7 +249,7 @@ class AstSpanMarker(
                 isInterface -> "interface"
                 else -> "class"
             })
-            markSimpleName(name)
+            markSimpleName(name, Style.TYPE_IDENTIFIER)
             markNodes(typeParameters)
             if (extendedTypes.isNonEmpty) {
                 markKeyword("extends")
@@ -259,10 +267,11 @@ class AstSpanMarker(
         add<ClassOrInterfaceType> {
             markNode(scope)
             markNodes(annotations)
-            markSimpleName(name, fqn = nodeTypeFinder.requireTypeUnless(nameAsString, this) { name ->
+            val fqn = nodeTypeFinder.requireTypeUnless(nameAsString, this) { name ->
                 // Mis-classified variables
                 name[0].isLowerCase() || name.all { it.isUpperCase() || it == '_' }
-            })
+            }
+            markSimpleName(name, Style.TYPE_IDENTIFIER, fqn = fqn)
             markNodes(typeArguments)
         }
         add<FieldDeclaration> {
@@ -274,7 +283,7 @@ class AstSpanMarker(
             markNodes(variables)
         }
         add<VariableDeclarator> {
-            markSimpleName(name)
+            markSimpleName(name, Style.FIELD_IDENTIFIER)
             findAncestor(NodeWithVariables::class.java)
                 .flatMap { it.maximumCommonType }
                 .filter { it.arrayLevel < type.arrayLevel }
@@ -288,17 +297,17 @@ class AstSpanMarker(
         add<MethodCallExpr> {
             markNode(scope)
             markNodes(typeArguments)
-            markSimpleName(name)
+            markSimpleName(name, Style.METHOD_IDENTIFIER)
             markNodes(arguments)
         }
         add<NameExpr> {
-            markSimpleName(name)
+            markSimpleName(name, Style.FIELD_IDENTIFIER)
         }
         add<ConstructorDeclaration> {
             markNodes(annotations)
             markNodes(modifiers)
             markNodes(typeParameters)
-            markSimpleName(name)
+            markSimpleName(name, Style.TYPE_IDENTIFIER)
             markNodes(parameters)
             if (!thrownExceptions.isNullOrEmpty()) {
                 markKeyword("throws")
@@ -313,7 +322,7 @@ class AstSpanMarker(
             if (isVarArgs) {
                 markNodes(varArgsAnnotations)
             }
-            markSimpleName(name)
+            markSimpleName(name, Style.FIELD_IDENTIFIER)
         }
         add<ArrayType> {
             val (aTypes, other) = generateSequence<Type>(this) { (it as? ArrayType)?.componentType }
@@ -340,7 +349,7 @@ class AstSpanMarker(
             markNodes(modifiers)
             markNodes(typeParameters)
             markNode(type)
-            markSimpleName(name)
+            markSimpleName(name, Style.METHOD_IDENTIFIER)
             markNode(receiverParameter)
             markNodes(parameters)
             if (!thrownExceptions.isNullOrEmpty()) {
@@ -353,7 +362,10 @@ class AstSpanMarker(
             markKeyword("if")
             markNode(condition)
             markNode(thenStmt)
-            markNode(elseStmt)
+            elseStmt.ifPresent {
+                markKeyword("else")
+                markNode(it)
+            }
         }
         add<ReturnStmt> {
             markKeyword("return")
@@ -372,7 +384,7 @@ class AstSpanMarker(
         }
         add<FieldAccessExpr> {
             markNode(scope)
-            markSimpleName(name)
+            markSimpleName(name, Style.FIELD_IDENTIFIER)
         }
         add<ObjectCreationExpr> {
             markNode(scope)
@@ -409,7 +421,7 @@ class AstSpanMarker(
             markNodes(typeArguments)
             when (identifier) {
                 "new" -> markKeyword("new")
-                else -> markToken(findTokenFor(identifier), Style.IDENTIFIER)
+                else -> markToken(findTokenFor(identifier), Style.METHOD_IDENTIFIER)
             }
         }
         add<TypeExpr> {
@@ -513,7 +525,7 @@ class AstSpanMarker(
         }
         add<TypeParameter> {
             markNodes(annotations)
-            markSimpleName(name)
+            markSimpleName(name, Style.TYPE_IDENTIFIER)
             if (!typeBound.isNullOrEmpty()) {
                 markKeyword("extends")
                 markNodes(typeBound)
@@ -572,7 +584,7 @@ class AstSpanMarker(
             markNodes(annotations)
             markNodes(modifiers)
             markKeyword("enum")
-            markSimpleName(name)
+            markSimpleName(name, Style.TYPE_IDENTIFIER)
 
             if (implementedTypes.isNonEmpty) {
                 markKeyword("implements")
@@ -584,7 +596,7 @@ class AstSpanMarker(
         }
         add<EnumConstantDeclaration> {
             markNodes(annotations)
-            markSimpleName(name)
+            markSimpleName(name, Style.FIELD_IDENTIFIER)
             markNodes(arguments)
             markNodes(classBody)
         }
@@ -605,10 +617,10 @@ class AstSpanMarker(
         }
         add<ContinueStmt> {
             markKeyword("continue")
-            label.ifPresent { markSimpleName(it) }
+            label.ifPresent { markSimpleName(it, Style.OTHER_IDENTIFIER) }
         }
         add<LabeledStmt> {
-            markSimpleName(label)
+            markSimpleName(label, Style.OTHER_IDENTIFIER)
             markNode(statement)
         }
         add<SynchronizedStmt> {
@@ -630,7 +642,7 @@ class AstSpanMarker(
 
             markKeyword("@")
             markKeyword("interface")
-            markSimpleName(name)
+            markSimpleName(name, Style.TYPE_IDENTIFIER)
             markNodes(members)
         }
         add<AssertStmt> {

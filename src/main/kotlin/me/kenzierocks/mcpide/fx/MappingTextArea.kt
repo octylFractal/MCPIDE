@@ -49,7 +49,7 @@ open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
     }
 }
 
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf("default-text"))
+val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf(Style.DEFAULT_TEXT.styleClass))
 
 data class MapStyle(
     val text: String,

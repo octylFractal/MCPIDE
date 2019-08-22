@@ -163,10 +163,11 @@ class MainController @Inject constructor(
                 resources.folderOpenIcon
             ).also { cell ->
                 Nodes.addInputMap(cell, process(mouseClicked(MouseButton.PRIMARY)) { e ->
+                    val item = cell.item
                     when {
-                        e.clickCount == 2 && isValidPath(cell.item.path) -> {
+                        e.clickCount == 2 && item != null && isValidPath(item.path) -> {
                             viewScope.launch {
-                                openFile(cell.item.path!!)
+                                openFile(item.path!!)
                             }
                             InputHandler.Result.CONSUME
                         }

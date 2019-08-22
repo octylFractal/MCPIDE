@@ -25,27 +25,33 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.github.javaparser.GeneratedJavaParserConstants
-import com.github.javaparser.Token
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import me.kenzierocks.mcpide.SRG_REGEX
 import me.kenzierocks.mcpide.comms.MappingInfo
-import me.kenzierocks.mcpide.detectSrgType
 
 /**
  * Given some text, tokenize it, replace names (not updating positioning), and produce a stream of styles.
  */
-fun Flow<Token>.remap(
+suspend fun remap(
+    text: String,
     mappingInfo: MappingInfo
-): Flow<MapStyle> {
-    return this.map { token ->
-        if (token.kind == GeneratedJavaParserConstants.IDENTIFIER) {
-            if (token.image?.detectSrgType() != null) {
-                val newName = (mappingInfo.mappings[token.image] ?: mappingInfo.exported[token.image])?.newName
-                    ?: token.image
-                return@map DEFAULT_MAP_STYLE.copy(text = newName, srgName = token.image)
-            }
+) : Sequence<MapStyle> {
+    return sequence {
+        var lastEnd = 0
+        while (true) {
+            val match = SRG_REGEX.find(text, startIndex = lastEnd) ?: break
+            yieldMissed(text, lastEnd until match.range.first)
+            val srgName = match.value
+            val newName = (mappingInfo.mappings[srgName] ?: mappingInfo.exported[srgName])?.newName
+                ?: srgName
+            yield(DEFAULT_MAP_STYLE.copy(text = newName, srgName = srgName))
+            lastEnd = match.range.last + 1
         }
-        DEFAULT_MAP_STYLE.copy(text = token.image)
+        yieldMissed(text, lastEnd until text.length)
+    }
+}
+
+private suspend fun SequenceScope<MapStyle>.yieldMissed(text: String, missed: IntRange) {
+    if (!missed.isEmpty()) {
+        yield(DEFAULT_MAP_STYLE.copy(text = text.substring(missed)))
     }
 }

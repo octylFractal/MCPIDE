@@ -25,9 +25,7 @@
 
 package me.kenzierocks.mcpide
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.ObjectReader
-import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +35,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
@@ -60,28 +59,26 @@ import me.kenzierocks.mcpide.comms.SetInitialMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.inject.JavaParserModule
 import me.kenzierocks.mcpide.inject.Model
 import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.inject.Srg
-import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
-import me.kenzierocks.mcpide.mcp.McpRunnerCreator
+import me.kenzierocks.mcpide.mcp.McpTypeSolver
 import me.kenzierocks.mcpide.project.ProjectWorker
 import me.kenzierocks.mcpide.project.projectWorker
 import me.kenzierocks.mcpide.util.OwnerExecutor
 import me.kenzierocks.mcpide.util.openErrorDialog
-import me.kenzierocks.mcpide.util.requireEntry
+import me.kenzierocks.mcpide.util.typesolve.LazyTypeSolver
 import mu.KotlinLogging
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ModelProcessing @Inject constructor(
-    private val jsonMapper: ObjectMapper,
     @Srg
     private val srgReader: ObjectReader,
     private val fileCache: FileCache,
@@ -89,7 +86,7 @@ class ModelProcessing @Inject constructor(
     private val workerScope: CoroutineScope,
     private val modelComms: ModelComms,
     private val projectComponentBuilder: ProjectComponent.Builder,
-    private val mcpRunnerCreator: McpRunnerCreator
+    private val mcpTypeSolver: McpTypeSolver
 ) {
     private val logger = KotlinLogging.logger { }
     private var projectWorker: ProjectWorker? = null
@@ -139,7 +136,7 @@ class ModelProcessing @Inject constructor(
                             }
                         }
                         is RetrieveDirtyStatus -> msg.responseImpl {
-                            requireProjectWorker().read { dirty }
+                            projectWorker?.read { dirty } ?: false
                         }
                         is GetMinecraftJarRoot -> msg.responseImpl {
                             requireProjectWorker().read { minecraftJarFileSystem.getPath("/") }
@@ -158,21 +155,16 @@ class ModelProcessing @Inject constructor(
     }
 
     private suspend fun decompileMinecraft(mcpConfigZip: Path) {
-        val configJson = ZipFile(mcpConfigZip.toFile()).use { zip ->
-            zip.getInputStream(zip.requireEntry("config.json")).use { eis ->
-                jsonMapper.readValue<McpConfig>(eis)
-            }
+        val p = requireProjectWorker()
+        p.write {
+            copyMcpConfigZip(mcpConfigZip)
         }
-        val runner = mcpRunnerCreator.create(
-            mcpConfigZip,
-            configJson,
-            "joined",
-            fileCache.mcpWorkDirectory.resolve(mcpConfigZip.fileName.toString().substringBefore(".zip"))
-        )
+        val runner = p.read { newMcpRunner() }
         val decompiledJar = decompileJar(runner) ?: return
-        requireProjectWorker().write(suspendFor = true) {
+        p.write {
             copyMinecraftJar(decompiledJar)
         }
+        openProject()
     }
 
     private suspend fun decompileJar(runner: McpRunner): Path? {
@@ -225,26 +217,44 @@ class ModelProcessing @Inject constructor(
     private suspend fun loadProject(path: Path) {
         projectWorker?.run { channel.close() }
         val projectComponent = projectComponentBuilder
+            .typeSolver(LazyTypeSolver(lazy {
+                runBlocking {
+                    val p = requireProjectWorker()
+                    val runner = p.read { newMcpRunner() }
+                    runner.run("decompile") {  }
+                    mcpTypeSolver.buildFrom(runner)
+                }
+            }))
             .projectDirectory(path)
+            .javaParserModule(JavaParserModule)
             .build()
         val p = projectComponent.project.let { proj ->
             workerScope.projectWorker(proj).also { projectWorker = it }
         }
         sendMessage(StatusUpdate("", "Opening project at $path"))
         sendMessage(OpenProject(projectComponent))
-        p.write {
+        var canOpen = false
+        p.write(suspendFor = true) {
             load()
             sendMessage(StatusUpdate("", ""))
             if (!hasInitialMappingsFile()) {
                 sendMessage(AskInitialMappings)
             }
-            if (!hasMinecraftJar()) {
+            if (!hasMinecraftJar() || !hasMcpConfig()) {
                 sendMessage(AskDecompileSetup)
+            } else {
+                canOpen = true
             }
-            val fs = FileSystems.newFileSystem(minecraftJar, null)
             Files.writeString(fileCache.cacheEntry("most_recent.txt"), path.toAbsolutePath().toString())
-            sendMessage(OpenInFileTree(fs.getPath("/")))
         }
+        if (canOpen) {
+            openProject()
+        }
+    }
+
+    private suspend fun openProject() {
+        val fs = requireProjectWorker().read { minecraftJarFileSystem }
+        sendMessage(OpenInFileTree(fs.getPath("/")))
     }
 
     private suspend fun rename(old: String, new: String) {

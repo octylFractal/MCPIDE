@@ -6,7 +6,19 @@
     -fx-font-weight: bold;
 }
 
-.identifier {
+.type-identifier {
+    -fx-fill: -dark-text-color;
+}
+
+.field-identifier {
+    -fx-fill: #9876AA;
+}
+
+.method-identifier {
+    -fx-fill: #FFC66D;
+}
+
+.other-identifier {
     -fx-fill: #9876AA;
 }
 

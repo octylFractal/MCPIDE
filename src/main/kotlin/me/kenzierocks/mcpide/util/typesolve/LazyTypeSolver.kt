@@ -23,26 +23,27 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide.util
+package me.kenzierocks.mcpide.util.typesolve
 
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration
+import com.github.javaparser.symbolsolver.model.resolution.SymbolReference
 import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
-class SafeJavaParserFacade(
-    typeSolver: TypeSolver
-) {
+/**
+ * [TypeSolver] that resolves the actual solver at use-time.
+ */
+class LazyTypeSolver(
+    delegate: Lazy<TypeSolver>
+) : TypeSolver {
+    private val realSolver by delegate
 
-    private val lock = ReentrantLock()
-    private val localJpf = ThreadLocal.withInitial {
-        lock.withLock {
-            JavaParserFacade.get(typeSolver).also {
-                JavaParserFacade.clearInstances()
-            }
-        }
+    override fun setParent(parent: TypeSolver?) {
+        realSolver.parent = parent
     }
 
-    fun get(): JavaParserFacade = localJpf.get()
+    override fun tryToSolveType(name: String?): SymbolReference<ResolvedReferenceTypeDeclaration> =
+        realSolver.tryToSolveType(name)
+
+    override fun getParent(): TypeSolver = realSolver.parent
 
 }

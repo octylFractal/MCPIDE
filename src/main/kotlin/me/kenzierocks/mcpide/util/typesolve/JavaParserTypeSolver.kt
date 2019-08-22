@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package me.kenzierocks.mcpide.util
+package me.kenzierocks.mcpide.util.typesolve
 
 import com.github.javaparser.JavaParser
 import com.github.javaparser.ParserConfiguration
