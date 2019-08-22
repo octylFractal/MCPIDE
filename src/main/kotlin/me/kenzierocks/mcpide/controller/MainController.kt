@@ -61,9 +61,7 @@ import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
-import me.kenzierocks.mcpide.inject.Model
 import me.kenzierocks.mcpide.Resources
-import me.kenzierocks.mcpide.inject.View
 import me.kenzierocks.mcpide.comms.AskDecompileSetup
 import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
@@ -84,8 +82,10 @@ import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.exhaustive
 import me.kenzierocks.mcpide.fx.JavaEditorArea
-import me.kenzierocks.mcpide.inject.ProjectComponent
 import me.kenzierocks.mcpide.inject.MavenAccess
+import me.kenzierocks.mcpide.inject.Model
+import me.kenzierocks.mcpide.inject.ProjectComponent
+import me.kenzierocks.mcpide.inject.View
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend

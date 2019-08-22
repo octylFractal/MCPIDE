@@ -142,7 +142,7 @@ class Project @Inject constructor(
         }
     }
 
-    fun newMcpRunner() : McpRunner {
+    fun newMcpRunner(): McpRunner {
         return mcpRunnerCreator.create(
             mcpConfigZip,
             "joined",

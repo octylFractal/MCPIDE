@@ -34,7 +34,7 @@ import me.kenzierocks.mcpide.comms.MappingInfo
 suspend fun remap(
     text: String,
     mappingInfo: MappingInfo
-) : Sequence<MapStyle> {
+): Sequence<MapStyle> {
     return sequence {
         var lastEnd = 0
         while (true) {

@@ -25,8 +25,6 @@
 
 package me.kenzierocks.mcpide.fx
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
 import dagger.BindsInstance
 import dagger.Component
@@ -44,7 +42,6 @@ import me.kenzierocks.mcpide.inject.JsonModule
 import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.inject.RepositorySystemModule
-import me.kenzierocks.mcpide.mcp.McpConfig
 import me.kenzierocks.mcpide.mcp.McpRunner
 import me.kenzierocks.mcpide.mcp.McpRunnerCreator
 import me.kenzierocks.mcpide.mcp.McpTypeSolver
@@ -90,7 +87,6 @@ class AstSpanMarkerFullTest {
             val mavenAccess: MavenAccess
             val mcpTypeSolver: McpTypeSolver
             val runnerCreator: McpRunnerCreator
-            val objectMapper: ObjectMapper
             val projectComponentBuilder: TestProjectComponent.Builder
         }
 
@@ -134,12 +130,8 @@ class AstSpanMarkerFullTest {
             )
             val root = Path.of("./build/tmp/mcp")
 
-            val zipFs = FileSystems.newFileSystem(zip, null)
-            val mcpConfig = Files.newInputStream(zipFs.getPath("config.json")).use { input ->
-                testComponent.objectMapper.readValue<McpConfig>(input)
-            }
             val mcpRunner = testComponent.runnerCreator.create(
-                zip, mcpConfig, "joined", root
+                zip, "joined", root
             )
 
             val messageActor = GlobalScope.actor<String>(capacity = CONFLATED) {

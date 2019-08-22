@@ -37,8 +37,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import me.kenzierocks.mcpide.inject.MavenAccess
-import me.kenzierocks.mcpide.util.typesolve.JavaParserTypeSolver
 import me.kenzierocks.mcpide.util.gradleCoordsToMaven
+import me.kenzierocks.mcpide.util.typesolve.JavaParserTypeSolver
 import org.eclipse.aether.artifact.DefaultArtifact
 import java.nio.file.FileSystems
 import java.nio.file.Files
