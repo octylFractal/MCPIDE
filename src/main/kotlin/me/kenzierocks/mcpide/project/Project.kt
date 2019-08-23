@@ -117,10 +117,6 @@ class Project @Inject constructor(
 
     // IO, save/load functions, work with files
 
-    fun isInitializedOnDisk(): Boolean {
-        return hasInitialMappingsFile() && hasMinecraftJar()
-    }
-
     fun hasInitialMappingsFile() = Files.exists(srgMappingsFile)
 
     fun hasMinecraftJar() = Files.exists(minecraftJar)

@@ -93,8 +93,7 @@ class JavaEditorArea(
             // If new edits while highlighting, toss out highlight result
             .mapLatest {
                 try {
-                    val hlight = computeHighlighting(it.text) ?: return@mapLatest null
-                    hlight to it.scrollTo
+                    computeHighlighting(it.text) to it.scrollTo
                 } catch (e: Exception) {
                     logger.warn(e) { "Highlighting error" }
                     e.openErrorDialog(
