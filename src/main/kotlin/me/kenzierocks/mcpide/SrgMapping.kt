@@ -58,7 +58,7 @@ enum class SrgType(
 ) {
     METHOD("func", "sm"),
     FIELD("field", "sf"),
-    PARAMTER("p", "sp")
+    PARAMETER("p", "sp")
 }
 
 // match TYPE_, to prevent other misc. matches

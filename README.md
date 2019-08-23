@@ -35,8 +35,7 @@ Below the tabs is the contents of the current file, which **cannot** be edited. 
 and then go to `Edit > Rename`, or use the associated shortcut. Type into the box that pops up, then hit 
 `Enter` to submit it. All files will be refreshed to use the new mapping. There is no undo (yet)!
 
-To recognize re-nameable properties, they will not be colored purple or orange. They will also be
-underlined.
+Re-nameable identifiers are marked with underlines.
 
 #### Status Bar
 Various status messages will appear here while async operations are occurring. If something isn't happening,

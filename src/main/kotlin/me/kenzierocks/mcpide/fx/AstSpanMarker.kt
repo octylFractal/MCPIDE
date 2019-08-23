@@ -154,7 +154,7 @@ class AstSpanMarker(
         range: IntRange, style: Style, jumpTarget: JumpTarget? = null
     ) {
         jeaDoc.updateStyle(range) {
-            copy(styleClasses = setOf(style.styleClass), jumpTarget = jumpTarget)
+            copy(style = style, jumpTarget = jumpTarget)
         }
     }
 

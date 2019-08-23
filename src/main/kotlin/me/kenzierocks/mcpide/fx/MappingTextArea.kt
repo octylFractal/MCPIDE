@@ -25,8 +25,11 @@
 
 package me.kenzierocks.mcpide.fx
 
+import me.kenzierocks.mcpide.SrgType
+import me.kenzierocks.mcpide.detectSrgType
 import org.fxmisc.richtext.CodeArea
 import org.fxmisc.richtext.StyledTextArea
+import java.util.Collections
 
 /**
  * TextArea with SRG mappings backing some sections of text.
@@ -49,11 +52,21 @@ open class MappingTextArea : StyledTextArea<Collection<String>, MapStyle>(
     }
 }
 
-val DEFAULT_MAP_STYLE = MapStyle(text = "", styleClasses = setOf(Style.DEFAULT_TEXT.styleClass))
+val DEFAULT_MAP_STYLE = MapStyle(text = "", style = Style.DEFAULT_TEXT)
 
 data class MapStyle(
     val text: String,
-    val styleClasses: Collection<String>,
+    val style: Style,
     val jumpTarget: JumpTarget? = null,
     val srgName: String? = null
-)
+) {
+    val styleClasses: Set<String> by lazy {
+        val result = mutableSetOf(style.styleClass)
+        when (srgName?.detectSrgType()) {
+            SrgType.FIELD -> Collections.addAll(result, "mapped", "field")
+            SrgType.METHOD -> Collections.addAll(result, "mapped", "method")
+            SrgType.PARAMETER -> Collections.addAll(result, "mapped", "param")
+        }
+        result
+    }
+}
