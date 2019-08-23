@@ -53,4 +53,3 @@ in a file titled `exported-commands.txt`.
 
 TODO:
 - Fix macOS menu being "java" in unbundled versions, dependent on [JDK-8091007](https://bugs.openjdk.java.net/browse/JDK-8091007)
-- Fix the highlighting color being offensively bright, dependent on [RichTextFX#303](https://github.com/FXMisc/RichTextFX/issues/303)
