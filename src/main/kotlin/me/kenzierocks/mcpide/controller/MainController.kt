@@ -305,7 +305,6 @@ class MainController @Inject constructor(
                 path.startsWith(node.value.path!!)
             }?.let { expandThis ->
                 expandThis.isExpanded = true
-                System.err.println("Expanded: ${expandThis.value.path}, target $path")
                 // Yes, must use toString -- these paths are from different FS instances
                 when (expandThis.value.path.toString()) {
                     pathAsString -> {
