@@ -26,85 +26,84 @@
 package me.kenzierocks.mcpide
 
 import javafx.application.Application
-import javafx.fxml.FXMLLoader
-import javafx.scene.Parent
 import javafx.scene.Scene
 import javafx.stage.Stage
-import me.kenzierocks.mcpide.handles.get
-
-fun main(args: Array<String>) {
-    Application.launch(MCPIDE::class.java, *args)
-}
+import me.kenzierocks.mcpide.inject.CommsModule
+import me.kenzierocks.mcpide.inject.CoroutineSupportModule
+import me.kenzierocks.mcpide.inject.CsvModule
+import me.kenzierocks.mcpide.inject.DaggerMCPIDEComponent
+import me.kenzierocks.mcpide.inject.FxModule
+import me.kenzierocks.mcpide.inject.HttpModule
+import me.kenzierocks.mcpide.inject.JsonModule
+import me.kenzierocks.mcpide.inject.MCPIDEComponent
+import me.kenzierocks.mcpide.inject.ModelModule
+import me.kenzierocks.mcpide.inject.ProjectComponent
+import me.kenzierocks.mcpide.inject.RepositorySystemModule
+import me.kenzierocks.mcpide.inject.ViewModule
+import me.kenzierocks.mcpide.inject.XmlModule
+import me.kenzierocks.mcpide.util.LineConsumer
+import me.kenzierocks.mcpide.util.LineOutputStream
+import mu.KLogger
+import mu.KotlinLogging
+import java.io.PrintStream
+import java.nio.charset.StandardCharsets
+import kotlin.system.exitProcess
 
 class MCPIDE : Application() {
 
-    companion object {
-        val TITLE = "MCPIDE"
-        private var INSTANCE_NULLABLE: MCPIDE? = null
+    private val logger = KotlinLogging.logger { }
 
-        val INSTANCE: MCPIDE
-            get() = this.INSTANCE_NULLABLE!!
-
-        // Class.resolveName(Ljava.lang.String;)Ljava.lang.String; -- bound to MCPIDE.class
-        private val HANDLE_RESOLVE_NAME =
-            Class::class["resolveName"]
-                .parameters(String::class)
-                .returns(String::class)
-                .build()
-                .bind(MCPIDE::class.java)
-
-        private fun resolveName(resource: String): String {
-            return HANDLE_RESOLVE_NAME.call(resource)!!
-        }
-
-        fun getResource(resource: String) = MCPIDE::class.java.getResource(resource)
-            ?: throw IllegalStateException("Missing resource: ${resolveName(resource)}")
-
-        fun <R : Parent> loadParent(resource: String): R {
-            return FXMLLoader.load(getResource(resource))
-        }
-
-        fun <R : Parent> parentLoader(resource: String): () -> R {
-            val loader = FXMLLoader(getResource(resource))
-            return { loader.load<R>() }
-        }
-    }
-
-    init {
-        Companion.INSTANCE_NULLABLE = this
-        // attempt hack to set name
-        setInternalApplicationName()
-    }
+    private val component: MCPIDEComponent = DaggerMCPIDEComponent.builder()
+        .appInstance(this)
+        .coroutineSupportModule(CoroutineSupportModule)
+        .commsModule(CommsModule)
+        .viewModule(ViewModule)
+        .modelModule(ModelModule)
+        .httpModule(HttpModule)
+        .csvModule(CsvModule)
+        .jsonModule(JsonModule)
+        .xmlModule(XmlModule)
+        .fxModule(FxModule)
+        .mavenModule(RepositorySystemModule)
+        .projectModule(ProjectComponent)
+        .build()
 
     lateinit var stage: Stage
+        private set
 
-    override fun start(stage: Stage) {
-        this.stage = stage
-        val parent: Parent = MCPIDE.loadParent("Main.fxml")
+    override fun start(primaryStage: Stage) {
+        logger.info { "Setting up primary stage" }
+        this.stage = primaryStage
+        val (parent, controller) = component.fxmlFiles.main()
         stage.scene = Scene(parent)
-        stage.title = TITLE
+        stage.title = "MCPIDE"
         stage.show()
         stage.centerOnScreen()
         stage.isMaximized = true
+        stage.setOnCloseRequest {
+            if (!controller.confirmClose()) {
+                it.consume()
+            }
+        }
+        logger.info { "Primary stage opened." }
+        controller.startEventLoop()
+        component.modelProcessing.start()
+        logger.info { "Started event loops." }
     }
-
 }
 
-private fun setInternalApplicationName() {
-    // Set the name of the application internally, so the macOS menus have the correct name
-    val comSunGlassUiApplicationClassName = "com.sun.glass.ui.Application"
+fun main(args: Array<String>) {
+    val logger = KotlinLogging.logger { }
     try {
-        val comSunGlassUiApplication = Class.forName(comSunGlassUiApplicationClassName)
-        val applicationGetApplication = comSunGlassUiApplication.getDeclaredMethod("GetApplication")
-        val applicationSetName = comSunGlassUiApplication.getDeclaredMethod("setName", String::class.java)
-        applicationSetName.invoke(applicationGetApplication.invoke(null), MCPIDE.TITLE)
-    } catch (e: Exception) {
-        // ignore -- this is fine
-        System.err.println("""
-Warning: Unable to set Application name
-This may be because your JDK does not have $comSunGlassUiApplicationClassName.
-This is not necessarily a problem, but you may experience weird UI issues.
-        """)
-        e.printStackTrace()
+        logger.info { "Starting MCPIDE, version ${ManifestVersion.getProjectVersion()}" }
+        System.setErr(getLoggingPrintStream { it::error })
+
+        Application.launch(MCPIDE::class.java, *args)
+    } catch (e: Throwable) {
+        logger.error(e) { "Fatal exception occurred." }
+        exitProcess(1)
     }
 }
+
+private fun getLoggingPrintStream(loggerMethod: (KLogger) -> LineConsumer) =
+    PrintStream(LineOutputStream(loggerMethod(KotlinLogging.logger("SYSTEM"))), true, StandardCharsets.UTF_8)

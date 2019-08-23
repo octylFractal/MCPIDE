@@ -25,7 +25,7 @@
 
 package me.kenzierocks.mcpide
 
-private val DEFAULT_VERSION = "DEV"
+private const val DEFAULT_VERSION = "DEV"
 
 class ManifestVersion {
     companion object {
