@@ -1,3 +1,4 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.techshroom.inciseblue.commonLib
 import net.minecrell.gradle.licenser.LicenseExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -7,7 +8,6 @@ plugins {
     kotlin("jvm") version kt
     kotlin("kapt") version kt
     id("com.techshroom.incise-blue") version "0.3.14"
-    id("com.github.johnrengelman.shadow") version "5.1.0"
     id("net.researchgate.release") version "2.8.1"
     id("org.openjfx.javafxplugin") version "0.0.8"
     application
@@ -121,10 +121,6 @@ dependencies {
         "testImplementation"(lib("params"))
         "testRuntime"(lib("engine"))
     }
-}
-
-tasks.shadowJar {
-    mergeServiceFiles()
 }
 
 javafx {

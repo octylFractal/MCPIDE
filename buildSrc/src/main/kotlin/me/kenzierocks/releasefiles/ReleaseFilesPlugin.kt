@@ -3,18 +3,23 @@ package me.kenzierocks.releasefiles
 import com.dd.plist.NSDictionary
 import com.dd.plist.NSString
 import com.dd.plist.PropertyListParser
+import com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin
+import com.github.jengelman.gradle.plugins.shadow.ShadowJavaPlugin
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import edu.sc.seis.launch4j.Launch4jPluginExtension
 import org.ajoberstar.grgit.operation.LogOp
 import org.ajoberstar.grgit.operation.OpenOp
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.ApplicationPluginConvention
-import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.StopExecutionException
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.getByName
+import org.gradle.kotlin.dsl.plugin
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.the
+import org.gradle.kotlin.dsl.withType
 import org.kohsuke.github.GitHubBuilder
 import java.io.File
 import java.nio.file.DirectoryNotEmptyException
@@ -99,6 +104,16 @@ class ReleaseFilesPlugin : Plugin<Project> {
             }
         }
 
+        // Avoid applying the application plugin
+        apply {
+            plugin<ShadowBasePlugin>()
+            plugin<ShadowJavaPlugin>()
+        }
+
+        tasks.withType<ShadowJar>().configureEach {
+            mergeServiceFiles()
+        }
+
         // make a shadow jar for Windows/Linux -- the gradle script is better for macOS
         val createExe = tasks.getByName("createExe")
         val shadowJar = tasks.getByName("shadowJar")
@@ -126,18 +141,6 @@ class ReleaseFilesPlugin : Plugin<Project> {
             outputs.files(createExe.outputs.files)
         }
 
-        // URJ is just the shadowJar
-        val universalReleaseJar = tasks.register<Copy>("universalReleaseJar") {
-            dependsOn(shadowJar)
-            val shadowJarFile = shadowJar.outputs.files.first()
-            val outFile = File(releasesBase, "${this@setup.name}-$version-universal.jar")
-
-            from(shadowJarFile) {
-                rename(".*", outFile.name)
-            }
-            into(outFile.parentFile)
-        }
-
         val deleteExtraL4jJunk = tasks.register("deleteExtraLaunch4jJunk") {
             description = "Deletes the extra launch4j lib folder"
             mustRunAfter(createExe)
@@ -156,16 +159,24 @@ class ReleaseFilesPlugin : Plugin<Project> {
             destinationDirectory.set(releasesBase)
         }
 
+        val linuxReleaseZip = tasks.register<Zip>("linuxReleaseZip") {
+            dependsOn("distZip")
+            from(zipTree(tasks.getByName<Zip>("distZip").archiveFile)) {
+                exclude("**/*.bat")
+            }
+            archiveFileName.set("${this@setup.name}-${this@setup.version}-linux.zip")
+        }
+
         val osBundles = tasks.register("osBundles") {
             dependsOn(macReleaseZip)
             dependsOn(windowsReleaseExe)
-            dependsOn(universalReleaseJar)
+            dependsOn(linuxReleaseZip)
             dependsOn(deleteExtraL4jJunk)
 
             outputs.files(
-                    macReleaseZip.get().outputs.files,
-                    windowsReleaseExe.get().outputs.files,
-                    universalReleaseJar.get().outputs.files
+                macReleaseZip.get().outputs.files,
+                windowsReleaseExe.get().outputs.files,
+                linuxReleaseZip.get().outputs.files
             )
         }
 
@@ -185,11 +196,11 @@ class ReleaseFilesPlugin : Plugin<Project> {
                 val gitHub = GitHubBuilder
                     .fromCredentials()
                     .build()
-                val repository = gitHub.getRepository("TechShroom/UnplannedDescent")
+                val repository = gitHub.getRepository("kenzierocks/MCPIDE")
                 val rel = repository
                     .createRelease(version.toString())
                     .name("\${project.name} \${project.version}")
-                    .body("Release of Bale Out, version \${project.version}.")
+                    .body("Release of MCPIDE, version \${project.version}.")
                     .draft(true) // draft it so I can write changelogs
                     .commitish(tipCommit.id)
                     .create()
@@ -206,7 +217,7 @@ class ReleaseFilesPlugin : Plugin<Project> {
                             "application/x-msdownload"
                         else -> throw StopExecutionException("What sort of MIME type is $ext?")
                     }
-                    println("Uploading asset $f of mime type $mime")
+                    logger.lifecycle("Uploading asset $f of mime type $mime")
                     try {
                         rel.uploadAsset(f, mime)
                     } catch (e: Exception) {

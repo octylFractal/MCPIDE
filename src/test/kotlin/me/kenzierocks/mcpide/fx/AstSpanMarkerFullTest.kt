@@ -73,6 +73,8 @@ class AstSpanMarkerFullTest {
 
     companion object {
 
+        private const val ENABLE_PROP = "test.ast.spans.full"
+
         @Component(
             modules = [
                 RepositorySystemModule::class,
@@ -118,6 +120,9 @@ class AstSpanMarkerFullTest {
         @JvmStatic
         @BeforeAll
         fun setUp() {
+            if (System.getProperty(ENABLE_PROP) != "1") {
+                return
+            }
             testComponent = DaggerAstSpanMarkerFullTest_Companion_TestComponent.builder()
                 .coroutineSupportModule(CoroutineSupportModule)
                 .httpModule(HttpModule)
@@ -192,7 +197,7 @@ class AstSpanMarkerFullTest {
 
     @ParameterizedTest
     @MethodSource("everyFile")
-    @EnabledIfSystemProperty(named = "test.ast.spans.full", matches = "1")
+    @EnabledIfSystemProperty(named = ENABLE_PROP, matches = "1")
     fun passesEveryFile(path: Path) {
         try {
             val doc: JeaDoc = SimpleEditableStyledDocument(
