@@ -12,7 +12,6 @@ import org.ajoberstar.grgit.operation.OpenOp
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.ApplicationPluginConvention
-import org.gradle.api.tasks.StopExecutionException
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByName
@@ -136,9 +135,9 @@ class ReleaseFilesPlugin : Plugin<Project> {
         }
 
         val windowsReleaseExe = tasks.register("windowsReleaseExe") {
-            extensions.extraProperties["outFile"] = createExe.property("dest")
+            dependsOn(createExe)
 
-            outputs.files(createExe.outputs.files)
+            outputs.files(project.the<Launch4jPluginExtension>().dest)
         }
 
         val deleteExtraL4jJunk = tasks.register("deleteExtraLaunch4jJunk") {
@@ -165,6 +164,7 @@ class ReleaseFilesPlugin : Plugin<Project> {
                 exclude("**/*.bat")
             }
             archiveFileName.set("${this@setup.name}-${this@setup.version}-linux.zip")
+            destinationDirectory.set(releasesBase)
         }
 
         val osBundles = tasks.register("osBundles") {
@@ -174,9 +174,9 @@ class ReleaseFilesPlugin : Plugin<Project> {
             dependsOn(deleteExtraL4jJunk)
 
             outputs.files(
-                macReleaseZip.get().outputs.files,
+                macReleaseZip.get().archiveFile,
                 windowsReleaseExe.get().outputs.files,
-                linuxReleaseZip.get().outputs.files
+                linuxReleaseZip.get().archiveFile
             )
         }
 
@@ -191,7 +191,7 @@ class ReleaseFilesPlugin : Plugin<Project> {
                 val log = LogOp(git.repository)
                 log.maxCommits = 1
                 val tipCommit = log.call().first()
-                    ?: throw StopExecutionException("No tip commit for branch \${git.branch.current.name}")
+                    ?: throw RuntimeException("No tip commit for branch \${git.branch.current.name}")
 
                 val gitHub = GitHubBuilder
                     .fromCredentials()
@@ -199,15 +199,15 @@ class ReleaseFilesPlugin : Plugin<Project> {
                 val repository = gitHub.getRepository("kenzierocks/MCPIDE")
                 val rel = repository
                     .createRelease(version.toString())
-                    .name("\${project.name} \${project.version}")
-                    .body("Release of MCPIDE, version \${project.version}.")
+                    .name("${project.name} ${project.version}")
+                    .body("Release of MCPIDE, version ${project.version}.")
                     .draft(true) // draft it so I can write changelogs
                     .commitish(tipCommit.id)
                     .create()
                 osBundles.get().outputs.files.forEach { f ->
                     // Possible files are .zip, .jar, and .exe
                     // Anything else -> exception
-                    val mime = when (val ext = f.toString().split("\\.").last()) {
+                    val mime = when (val ext = f.toString().substringAfterLast('.')) {
                         "zip", "jar" -> "application/zip"
                         "exe" ->
                             // I really have no idea which one to use...
@@ -215,7 +215,7 @@ class ReleaseFilesPlugin : Plugin<Project> {
                             // application/vnd.microsoft.portable-executable -- listed by IANA
                             // there are others
                             "application/x-msdownload"
-                        else -> throw StopExecutionException("What sort of MIME type is $ext?")
+                        else -> throw RuntimeException("What sort of MIME type is $ext? From: $f")
                     }
                     logger.lifecycle("Uploading asset $f of mime type $mime")
                     try {
