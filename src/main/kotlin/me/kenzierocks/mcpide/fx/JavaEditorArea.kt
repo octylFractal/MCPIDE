@@ -176,10 +176,15 @@ class JavaEditorArea(
             return
         }
         val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
-        if (srgName in mappings.mappings && !askProceedRename()) {
+        val mappedName = mappings.mappings[srgName]?.newName
+        if (isAlreadyMapped(srgName, text, mappedName) && !askProceedRename()) {
             return
         }
         publishComms.modelChannel.send(Rename(srgName, text))
+    }
+
+    private fun isAlreadyMapped(srg: String, new: String, mapped: String?): Boolean {
+        return mapped != null && srg != mapped && new != mapped
     }
 
     private suspend fun askProceedRename(): Boolean {

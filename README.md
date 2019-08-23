@@ -49,6 +49,8 @@ You can view all replacements by going to `View > Exportable Mappings`. You can 
 To export to MCP commands, go to `File > Export`. This will export the commands to the project directory,
 in a file titled `exported-commands.txt`.
 
+If you would like to send these commands to MCPBot in a simple way, check out
+[mcp-irc-export](https://github.com/kenzierocks/mcp-irc-export).
 
 TODO:
 - Fix macOS menu being "java" in unbundled versions, dependent on [JDK-8091007](https://bugs.openjdk.java.net/browse/JDK-8091007)

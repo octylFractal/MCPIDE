@@ -41,7 +41,7 @@ suspend fun remap(
             val match = SRG_REGEX.find(text, startIndex = lastEnd) ?: break
             yieldMissed(text, lastEnd until match.range.first)
             val srgName = match.value
-            val newName = (mappingInfo.mappings[srgName] ?: mappingInfo.exported[srgName])?.newName
+            val newName = (mappingInfo.exported[srgName] ?: mappingInfo.mappings[srgName])?.newName
                 ?: srgName
             yield(DEFAULT_MAP_STYLE.copy(text = newName, srgName = srgName))
             lastEnd = match.range.last + 1

@@ -41,7 +41,10 @@ data class SrgMapping(
     val type = srgName.detectSrgType()
         ?: throw IllegalArgumentException("SRG name did not contain type prefix")
 
-    fun toCommand() = "!${type.commandPrefix} $srgName $newName" + " $desc".ifBlank { "" }
+    fun toCommand() = "!${type.commandPrefix} $srgName $newName" + when (desc) {
+        null -> ""
+        else -> " $desc"
+    }
 }
 
 @Suppress("unused")
