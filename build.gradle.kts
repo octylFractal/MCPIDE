@@ -4,7 +4,7 @@ import net.minecrell.gradle.licenser.LicenseExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    val kt = "1.3.41"
+    val kt = "1.3.50"
     kotlin("jvm") version kt
     kotlin("kapt") version kt
     id("com.techshroom.incise-blue") version "0.3.14"

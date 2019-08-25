@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+
+<HBox fx:id="root" alignment="CENTER" spacing="5.0" styleClass="root" stylesheets="@darktheme.css" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.kenzierocks.mcpide.controller.FindPopupController">
+   <children>
+      <TextField fx:id="textField" onAction="#startSearch" promptText="Find..." HBox.hgrow="ALWAYS" />
+      <Label fx:id="searchTracker" styleClass="dark-label" text="x/y" />
+      <Button fx:id="previousButton" mnemonicParsing="false" onAction="#searchPrevious" text="&lt;" HBox.hgrow="NEVER" />
+    <Button fx:id="nextButton" mnemonicParsing="false" onAction="#searchNext" text="&gt;" HBox.hgrow="NEVER" />
+      <Button mnemonicParsing="false" onAction="#close" text="X" />
+   </children>
+   <padding>
+      <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+   </padding>
+</HBox>

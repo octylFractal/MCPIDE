@@ -25,8 +25,13 @@
 
 package me.kenzierocks.mcpide.fx
 
+import javafx.beans.InvalidationListener
+import javafx.scene.Parent
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyCombination
 import javafx.scene.input.MouseButton
 import javafx.scene.input.MouseEvent
+import javafx.scene.layout.Region
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +45,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
 import me.kenzierocks.mcpide.comms.JumpTo
 import me.kenzierocks.mcpide.comms.PublishComms
@@ -47,6 +53,8 @@ import me.kenzierocks.mcpide.comms.Rename
 import me.kenzierocks.mcpide.comms.RetrieveMappings
 import me.kenzierocks.mcpide.comms.StatusUpdate
 import me.kenzierocks.mcpide.comms.sendForResponse
+import me.kenzierocks.mcpide.controller.FindPopupController
+import me.kenzierocks.mcpide.controller.SearchHelper
 import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.util.confirmSimple
 import me.kenzierocks.mcpide.util.openErrorDialog
@@ -58,8 +66,11 @@ import org.fxmisc.richtext.LineNumberFactory
 import org.fxmisc.richtext.model.ReadOnlyStyledDocument
 import org.fxmisc.richtext.model.SimpleEditableStyledDocument
 import org.fxmisc.richtext.model.StyleSpansBuilder
-import org.fxmisc.wellbehaved.event.EventPattern
+import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
+import org.fxmisc.wellbehaved.event.EventPattern.mousePressed
+import org.fxmisc.wellbehaved.event.InputHandler
 import org.fxmisc.wellbehaved.event.InputMap.consume
+import org.fxmisc.wellbehaved.event.InputMap.process
 import org.fxmisc.wellbehaved.event.Nodes
 import java.nio.file.Path
 
@@ -70,7 +81,9 @@ class JavaEditorArea(
     @Provided
     private val publishComms: PublishComms,
     @Provided
-    private val astSpanMarkerCreator: AstSpanMarkerCreator
+    private val astSpanMarkerCreator: AstSpanMarkerCreator,
+    @Provided
+    private val fxmlFiles: FxmlFiles
 ) : MappingTextArea() {
     private val logger = KotlinLogging.logger { }
 
@@ -79,13 +92,59 @@ class JavaEditorArea(
     )
 
     private val updatesChannel = Channel<Update>(Channel.BUFFERED)
+    private val findParent: Parent
+    private val findController: FindPopupController
 
     init {
         // Jump-To hook
         Nodes.addInputMap(this, consume(
-            EventPattern.mousePressed(MouseButton.PRIMARY)
+            mousePressed(MouseButton.PRIMARY)
                 .onlyIf { e -> e.clickCount == 1 && e.isShortcutDown }
         ) { jumpTo(it) })
+        // Find hook
+        val (p, c) = fxmlFiles.findPopup()
+        findParent = p
+        findController = c
+        Nodes.addInputMap(this, consume(
+            keyPressed(KeyCode.F, KeyCombination.SHORTCUT_DOWN)
+        ) {
+            openFindWindow()
+        })
+        Nodes.addInputMap(this, process(
+            keyPressed(KeyCode.ESCAPE)
+        ) {
+            when {
+                findParent.isVisible -> {
+                    findParent.isVisible = false
+                    InputHandler.Result.CONSUME
+                }
+                else -> InputHandler.Result.PROCEED
+            }
+        })
+        val helper = SearchHelper(
+            search = { term ->
+                val searcher = term.toRegex(RegexOption.LITERAL)
+                paragraphs.asSequence()
+                    .withIndex()
+                    .flatMap { (index, paragraph) ->
+                        searcher.findAll(paragraph.text).map { index to it }
+                    }
+            },
+            moveToResult = { (paragraph, result) ->
+                selectRange(paragraph, result.range.first, paragraph, result.range.last + 1)
+            }
+        )
+        helper.bindTo(c)
+        c.onCloseRequested = {
+            findParent.isVisible = false
+        }
+        children.add(p)
+        p.isVisible = false
+        multiPlainChanges().subscribe { helper.reSearch(c) }
+        p.visibleProperty().addListener(InvalidationListener {
+            // Focus us after it closes
+            requestFocus()
+        })
 
         isEditable = false
         paragraphGraphicFactory = LineNumberFactory.get(this)
@@ -159,6 +218,20 @@ class JavaEditorArea(
         GlobalScope.launch {
             publishComms.viewChannel.send(JumpTo(jt))
         }
+    }
+
+    private fun openFindWindow() {
+        findParent.isVisible = true
+        findController.textField.requestFocus()
+    }
+
+    override fun layoutChildren() {
+        super.layoutChildren()
+        // Position & size find window
+        (findParent as Region).autosize()
+        val fh = findParent.height
+        val fw = findParent.width
+        findParent.resizeRelocate(width - fw, 0.0, fw, fh)
     }
 
     suspend fun startRename() {

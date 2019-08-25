@@ -88,7 +88,7 @@
     -fx-background-color: #555a5c;
 }
 
-.tab-label {
+.tab-label, .dark-label {
     -fx-text-fill: -dark-text-color;
 }
 

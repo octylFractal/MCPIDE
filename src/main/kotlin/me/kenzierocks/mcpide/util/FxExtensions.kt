@@ -28,8 +28,12 @@ package me.kenzierocks.mcpide.util
 import com.google.common.base.Throwables
 import javafx.beans.InvalidationListener
 import javafx.beans.Observable
+import javafx.beans.value.ObservableIntegerValue
 import javafx.beans.value.ObservableValue
+import javafx.beans.value.WritableIntegerValue
+import javafx.beans.value.WritableValue
 import javafx.event.EventHandler
+import javafx.scene.Node
 import javafx.scene.Parent
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
@@ -52,6 +56,7 @@ import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType.methodType
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.reflect.KProperty
 
 /**
  * Set the preferred size of the dialog pane to the preferred size of [DialogPane.content].
@@ -160,4 +165,38 @@ fun Parent.openScenicView() {
     } catch (e: Exception) {
         logger.debug(e) { "Failed to load ScenicView." }
     }
+}
+
+operator fun <T> ObservableValue<T>.getValue(thisRef: Any?, property: KProperty<*>): T {
+    return value
+}
+
+operator fun ObservableIntegerValue.getValue(thisRef: Any?, property: KProperty<*>): Int {
+    return intValue()
+}
+
+operator fun <T> WritableValue<T>.setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+    this.value = value
+}
+
+operator fun WritableIntegerValue.setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
+    this.set(value)
+}
+
+class NullableOV<T>(private val observableValue: ObservableValue<T>) {
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): T? = observableValue.value
+}
+
+class NullableWV<T>(private val writableValue: WritableValue<T>) {
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): T? = writableValue.value
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T?) {
+        writableValue.value = value
+    }
+}
+
+val <T> ObservableValue<T>.nullable get() = NullableOV(this)
+val <T> WritableValue<T>.nullable get() = NullableWV(this)
+
+fun Node.findRoot(): Parent? {
+    return generateSequence(parent) { prev -> prev.parent }.lastOrNull()
 }

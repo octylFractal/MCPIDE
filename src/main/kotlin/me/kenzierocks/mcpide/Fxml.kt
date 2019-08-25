@@ -29,27 +29,31 @@ import javafx.fxml.FXMLLoader
 import javafx.scene.Parent
 import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
+import me.kenzierocks.mcpide.controller.FindPopupController
 import me.kenzierocks.mcpide.controller.MainController
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-data class LoadedParent<T : Parent, C>(val parent: T, val controller: C)
+data class LoadedParent<C>(val parent: Parent, val controller: C)
 
 @Singleton
 class FxmlFiles @Inject constructor(
     private val fxmlLoader: Provider<FXMLLoader>
 ) {
-    private inline fun <reified T : Parent, reified C> load(location: String): LoadedParent<T, C> {
+    private fun <C> load(location: String, controllerType: Class<C>): LoadedParent<C> {
         val loader = fxmlLoader.get()
         loader.location = ResourceUrl(location)
         // Enforce generics now, to prevent CCE later
-        val parent: T = T::class.java.cast(loader.load())
-        val controller: C = C::class.java.cast(loader.getController())
+        val parent: Parent = loader.load() as Parent
+        val controller: C = controllerType.cast(loader.getController())
         return LoadedParent(parent, controller)
     }
 
-    fun main() = load<Parent, MainController>("Main.fxml")
-    fun fileAskDialog() = load<Parent, FileAskDialogController>("FileAskDialog.fxml")
-    fun exportableMappings() = load<Parent, ExportableMappingsController>("ExportableMappings.fxml")
+    private inline fun <reified C> load(location: String) = load(location, C::class.java)
+
+    fun main() = load<MainController>("Main.fxml")
+    fun fileAskDialog() = load<FileAskDialogController>("FileAskDialog.fxml")
+    fun exportableMappings() = load<ExportableMappingsController>("ExportableMappings.fxml")
+    fun findPopup() = load<FindPopupController>("FindPopup.fxml")
 }
