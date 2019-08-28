@@ -260,7 +260,7 @@ class MainController @Inject constructor(
 
     private suspend fun openFile(path: Path, scrollTo: Int? = null) {
         val title = path.fileName.toString()
-        val content = withContext(Dispatchers.IO) { Files.readString(path) }
+        val content = withContext(Dispatchers.IO) { Files.readString(path).replace("\r\n", "\n") }
         val existing = textView.tabs.firstOrNull { it.text == title }
         if (existing != null && openInExisting(existing, content)) {
             return
