@@ -33,8 +33,9 @@ import java.util.concurrent.TimeUnit
 
 val JAVA_HOME: String? = System.getProperty("java.home")
 val DEFAULT_JAVA_EXECUTABLE = JAVA_HOME?.let { javaHome ->
-    Paths.get(javaHome, "bin/java")
-}?.takeIf { Files.exists(it) } ?: throw IllegalStateException("No Java executable in $JAVA_HOME")
+    listOf(Paths.get(javaHome, "bin/java"), Paths.get(javaHome, "bin/java.exe"))
+        .firstOrNull { Files.exists(it) }
+} ?: throw IllegalStateException("No Java executable in $JAVA_HOME")
 
 /**
  * Utility for executing `java` commands.
