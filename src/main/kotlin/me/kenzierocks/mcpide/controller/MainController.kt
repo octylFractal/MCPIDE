@@ -284,7 +284,7 @@ class MainController @Inject constructor(
     private suspend fun refreshOpenFiles() {
         coroutineScope {
             textView.tabs.mapNotNull { it.editorArea }
-                .map { async(context = Dispatchers.IO) { it to Files.readString(it.path) } }
+                .map { async(context = Dispatchers.IO) { it to Files.readString(it.path).replace("\r\n", "\n") } }
                 .map { it.await() }
                 .forEach { (e, c) -> e.updateText(c) }
         }
