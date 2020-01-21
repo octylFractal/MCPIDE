@@ -123,12 +123,7 @@ class AstSpanMarkerFullTest {
             if (System.getProperty(ENABLE_PROP) != "1") {
                 return
             }
-            testComponent = DaggerAstSpanMarkerFullTest_Companion_TestComponent.builder()
-                .coroutineSupportModule(CoroutineSupportModule)
-                .httpModule(HttpModule)
-                .jsonModule(JsonModule)
-                .repositorySystemModule(RepositorySystemModule)
-                .build()
+            testComponent = DaggerAstSpanMarkerFullTest_Companion_TestComponent.create()
 
             val zip = testComponent.mavenAccess.resolveArtifactOrFail(
                 DefaultArtifact(gradleCoordsToMaven("de.oceanlabs.mcp:mcp_config:1.14.4-20190719.225934@zip"))
@@ -148,7 +143,7 @@ class AstSpanMarkerFullTest {
             val mcJar = readMinecraftJar(root, zip, messageActor, mcpRunner)
             val libList = readLibList(root, zip, messageActor, mcpRunner)
 
-            mcFs = FileSystems.newFileSystem(mcJar, null)
+            mcFs = FileSystems.newFileSystem(mcJar)
             val typeSolver = runBlocking {
                 testComponent.mcpTypeSolver.buildFromCustom(
                     mcpRunner, mcJar, libList

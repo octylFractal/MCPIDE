@@ -130,7 +130,7 @@ class Project @Inject constructor(
     }
 
     val minecraftJarFileSystem: FileSystem
-        get() = FileSystems.newFileSystem(minecraftJar, null)
+        get() = FileSystems.newFileSystem(minecraftJar)
 
     fun copyMcpConfigZip(from: Path) {
         safeWrite(mcpConfigZip) { output ->

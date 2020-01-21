@@ -578,7 +578,7 @@ class AstSpanMarker(
         }
         add<BreakStmt> {
             markKeyword("break")
-            markNode(value)
+            markNode(label)
         }
         add<EnumDeclaration> {
             markNodes(annotations)

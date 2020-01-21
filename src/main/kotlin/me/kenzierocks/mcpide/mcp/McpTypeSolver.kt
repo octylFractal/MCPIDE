@@ -60,7 +60,7 @@ class McpTypeSolver @Inject constructor(
 
     // Allow custom setup of these files:
     suspend fun buildFromCustom(mcpRunner: McpRunner, minecraftJar: Path, librariesList: Path) : TypeSolver {
-        val mcFs = FileSystems.newFileSystem(minecraftJar, null)
+        val mcFs = FileSystems.newFileSystem(minecraftJar)
         val typeSolver = CombinedTypeSolver(
             CombinedTypeSolver.ExceptionHandlers.IGNORE_ALL,
             JavaParserTypeSolver(mcFs.getPath("/"))

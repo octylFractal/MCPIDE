@@ -61,6 +61,7 @@ import me.kenzierocks.mcpide.controller.FindInPathController
 import me.kenzierocks.mcpide.controller.FindPopupController
 import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
+import me.kenzierocks.mcpide.util.HttpsUpgradeInterceptor
 import me.kenzierocks.mcpide.util.OwnerExecutor
 import me.kenzierocks.mcpide.util.openErrorDialog
 import me.kenzierocks.mcpide.util.typesolve.NodeTypeFinder
@@ -133,6 +134,7 @@ object HttpModule {
     fun provideHttpClient(fileCache: FileCache) =
         OkHttpClient.Builder()
             .cache(Cache(fileCache.okHttpCacheDirectory.toFile(), 10_000_000))
+            .addInterceptor(HttpsUpgradeInterceptor())
             .build()
 }
 

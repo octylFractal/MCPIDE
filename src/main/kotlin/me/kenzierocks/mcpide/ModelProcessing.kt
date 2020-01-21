@@ -202,7 +202,7 @@ class ModelProcessing @Inject constructor(
     }
 
     private fun readSrgZipEntry(srgMappingsZip: Path, entry: String): Flow<SrgMapping> {
-        val zipFs = FileSystems.newFileSystem(srgMappingsZip, null)
+        val zipFs = FileSystems.newFileSystem(srgMappingsZip)
         val entryPath = zipFs.getPath(entry)
         require(Files.exists(entryPath)) { "No $entry in $srgMappingsZip" }
         return flow {
