@@ -29,6 +29,7 @@ import javafx.fxml.FXMLLoader
 import javafx.scene.Parent
 import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
+import me.kenzierocks.mcpide.controller.FindInPathController
 import me.kenzierocks.mcpide.controller.FindPopupController
 import me.kenzierocks.mcpide.controller.MainController
 import javax.inject.Inject
@@ -56,4 +57,5 @@ class FxmlFiles @Inject constructor(
     fun fileAskDialog() = load<FileAskDialogController>("FileAskDialog.fxml")
     fun exportableMappings() = load<ExportableMappingsController>("ExportableMappings.fxml")
     fun findPopup() = load<FindPopupController>("FindPopup.fxml")
+    fun findInPath() = load<FindInPathController>("FindInPathDialog.fxml")
 }

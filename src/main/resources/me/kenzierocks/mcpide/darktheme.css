@@ -1,5 +1,6 @@
 * {
     -dark-text-color: #BABABA;
+    -dark-text-color-alt: derive(-dark-text-color, -90%);
     -dark-selected-text-color: #BABABA;
     -dark-bg-color: #3C3F41;
     -darker-bg-color: #2E3133;
@@ -34,9 +35,20 @@
     -fx-table-cell-border-color: derive(-dark-bg-color, 10%);
 }
 
-.root, .tab-content-area, .tree-cell {
+.root, .tab-content-area, .tree-cell, .titled-pane > .title, .list-view {
     -fx-text-fill: -dark-text-color;
     -fx-background-color: -dark-bg-color;
+}
+
+.titled-pane > .content {
+    -fx-background-color: -darker-bg-color;
+    -fx-border-color: -dark-box-border;
+}
+
+.text-field {
+    -fx-background-color: -dark-bg-color;
+    -fx-text-fill: -dark-text-color;
+    -fx-prompt-text-fill: derive(-dark-text-color, -40%);
 }
 
 .table-view .column-header-background {
@@ -103,4 +115,16 @@
 .cell:selected {
     -fx-text-fill: -dark-selected-text-color;
     -fx-background-color: -dark-selected-bg-color;
+}
+
+.radio-button {
+    -fx-text-fill: -dark-text-color;
+}
+
+.radio-button > .radio {
+    -fx-background-color: -dark-bg-color-alt;
+}
+
+.radio-button:selected > .radio > .dot {
+    -fx-background-color: -darker-bg-color;
 }

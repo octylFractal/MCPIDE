@@ -49,6 +49,7 @@ import javafx.scene.input.MouseButton
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
 import javafx.stage.Stage
+import javafx.stage.StageStyle
 import javafx.stage.WindowEvent
 import javafx.util.Callback
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,7 @@ import me.kenzierocks.mcpide.comms.AskInitialMappings
 import me.kenzierocks.mcpide.comms.DecompileMinecraft
 import me.kenzierocks.mcpide.comms.Exit
 import me.kenzierocks.mcpide.comms.ExportMappings
+import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
 import me.kenzierocks.mcpide.comms.JumpTo
 import me.kenzierocks.mcpide.comms.LoadProject
 import me.kenzierocks.mcpide.comms.ModelMessage
@@ -531,6 +533,20 @@ class MainController @Inject constructor(
             ?: return
         viewScope.launch {
             currentArea.startRename()
+        }
+    }
+
+    @FXML
+    fun findInPath() {
+        viewScope.launch {
+            val (parent, controller) = fxmlFiles.findInPath()
+            controller.rootPath = viewComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
+            val stage = Stage(StageStyle.UNDECORATED)
+            stage.initModality(Modality.APPLICATION_MODAL)
+            stage.scene = Scene(parent)
+            stage.show()
+            stage.sizeToScene()
+            stage.centerOnScreen()
         }
     }
 

@@ -57,6 +57,7 @@ import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
+import me.kenzierocks.mcpide.controller.FindInPathController
 import me.kenzierocks.mcpide.controller.FindPopupController
 import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
@@ -186,13 +187,15 @@ object FxModule {
         mainController: Provider<MainController>,
         fileAskDialogController: Provider<FileAskDialogController>,
         exportableMappingsController: Provider<ExportableMappingsController>,
-        findPopupController: Provider<FindPopupController>
+        findPopupController: Provider<FindPopupController>,
+        findInPathController: Provider<FindInPathController>
     ): ControllerFactory {
         val controllers = mapOf(
             controllerBind(mainController),
             controllerBind(fileAskDialogController),
             controllerBind(exportableMappingsController),
-            controllerBind(findPopupController)
+            controllerBind(findPopupController),
+            controllerBind(findInPathController)
         )
         return object : ControllerFactory {
             override fun call(cls: Class<*>) =

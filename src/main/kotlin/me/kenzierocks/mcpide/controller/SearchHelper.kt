@@ -25,28 +25,59 @@
 
 package me.kenzierocks.mcpide.controller
 
+import javafx.beans.binding.Bindings
+import javafx.beans.property.ReadOnlyListWrapper
+import javafx.beans.property.SimpleIntegerProperty
+import javafx.beans.property.SimpleStringProperty
+import javafx.collections.FXCollections
+import javafx.collections.ObservableList
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.toList
+import me.kenzierocks.mcpide.util.getValue
+import me.kenzierocks.mcpide.util.setValue
+
 /**
  * Class for adapting search functionality to [FindPopupController].
  *
- * @param search turn a term into a sequence of locatable Ts
- * @param moveToResult move to a given result
  * @param T search result, should hold location information
  */
-class SearchHelper<T>(
-    private val search: (term: String) -> Sequence<T>?,
-    private val moveToResult: (result: T) -> Unit
-) {
+abstract class SearchHelper<T> {
+    private val listInternalProperty by lazy { ReadOnlyListWrapper<T>(this, "list", FXCollections.observableArrayList()) }
+    val listProperty = listInternalProperty.readOnlyProperty!!
+    val list: ObservableList<T> by listProperty
 
-    fun bindTo(fpc: FindPopupController) {
-        fpc.onStartSearch = this::onSearchStart
-        fpc.onSearchNext = this::onSearchNext
-        fpc.onSearchPrevious = this::onSearchPrevious
+    val searchingBinding = listProperty.emptyProperty().not()!!
+
+    val searchTermProperty by lazy {
+        object : SimpleStringProperty(this, "searchTerm", "") {
+            override fun invalidated() {
+                val new = get()
+                val trimmed = new.trim()
+                if (new != trimmed) {
+                    set(trimmed)
+                }
+            }
+        }
+    }
+    private var searchTerm: String by searchTermProperty
+
+    private val currentSearchIndexProperty by lazy { SimpleIntegerProperty(this, "currentSearchIndex", -1) }
+    private var currentSearchIndex: Int by currentSearchIndexProperty
+
+    private val maxSearchIndexProperty = listProperty.sizeProperty()!!
+    private val maxSearchIndex: Int by maxSearchIndexProperty
+
+    val searchTrackerTextBinding by lazy(LazyThreadSafetyMode.NONE) {
+        Bindings.createStringBinding({
+            when {
+                currentSearchIndex < 0 || maxSearchIndex < 0
+                    || currentSearchIndex > maxSearchIndex -> "0/0"
+                else -> "$currentSearchIndex/$maxSearchIndex"
+            }
+        }, arrayOf(currentSearchIndexProperty, maxSearchIndexProperty))!!
     }
 
-    private var list: List<T>? = null
-    private var index: Int = -1
-
-    private fun requireList(): List<T> = requireNotNull(list) {
+    private fun requireList(): List<T> = requireNotNull(list.takeUnless { it.isEmpty() }) {
         "No search started yet!"
     }
 
@@ -54,21 +85,18 @@ class SearchHelper<T>(
      * Trigger search initialization again. This should be called if
      * [search]'s input changes.
      */
-    fun reSearch(fpc: FindPopupController) {
-        fpc.searching = false
-        fpc.currentSearchIndex = -1
-        fpc.maxSearchIndex = -1
-        onSearchStart(fpc)
+    suspend fun reSearch() {
+        onSearchStart()
     }
 
-    private fun onSearchStart(fpc: FindPopupController): Boolean {
-        val term = fpc.searchTerm
+    suspend fun onSearchStart(): Boolean {
+        val term = searchTerm
         if (term.isBlank()) {
             return false
         }
         val results = search(term)
-        list = null
-        index = -1
+        list.clear()
+        currentSearchIndex = -1
         return when (results) {
             null -> false
             else -> {
@@ -77,9 +105,9 @@ class SearchHelper<T>(
                     // Catch oddities about the search
                     l.isEmpty() -> false
                     else -> {
-                        list = l
-                        index = 0
-                        pushSearch(fpc)
+                        list.setAll(l)
+                        currentSearchIndex = 0
+                        moveToCurrentResult()
                         true
                     }
                 }
@@ -87,28 +115,37 @@ class SearchHelper<T>(
         }
     }
 
-    private fun pushSearch(fpc: FindPopupController) {
+    private suspend fun moveToCurrentResult() {
         val l = requireList()
-        val result = l[index]
+        val result = l[currentSearchIndex]
         moveToResult(result)
-        fpc.currentSearchIndex = index + 1
-        fpc.maxSearchIndex = l.lastIndex + 1
     }
 
-    private fun onSearchNext(fpc: FindPopupController) {
+    suspend fun onSearchNext() {
         val l = requireList()
-        index = (index + 1) % l.size
-        pushSearch(fpc)
+        currentSearchIndex = (currentSearchIndex + 1) % l.size
+        moveToCurrentResult()
     }
 
-    private fun onSearchPrevious(fpc: FindPopupController) {
+    suspend fun onSearchPrevious() {
         val l = requireList()
         // Correct `mod` for negative numbers
-        val m = index - 1 % l.size
-        index = when {
+        val m = currentSearchIndex - 1 % l.size
+        currentSearchIndex = when {
             0 <= m -> m
             else -> m + l.size
         }
-        pushSearch(fpc)
+        moveToCurrentResult()
     }
+
+    suspend fun onSearchCanceled() {
+        cancel()
+    }
+
+    // Implementation
+
+    abstract fun search(term: String): Flow<T>?
+    abstract suspend fun moveToResult(result: T)
+    abstract suspend fun cancel()
+
 }

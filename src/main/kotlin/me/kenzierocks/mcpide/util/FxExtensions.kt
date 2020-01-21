@@ -194,8 +194,8 @@ class NullableWV<T>(private val writableValue: WritableValue<T>) {
     }
 }
 
-val <T> ObservableValue<T>.nullable get() = NullableOV(this)
-val <T> WritableValue<T>.nullable get() = NullableWV(this)
+val <T> ObservableValue<T>.valNullable get() = NullableOV(this)
+val <T> WritableValue<T>.varNullable get() = NullableWV(this)
 
 fun Node.findRoot(): Parent? {
     return generateSequence(parent) { prev -> prev.parent }.lastOrNull()

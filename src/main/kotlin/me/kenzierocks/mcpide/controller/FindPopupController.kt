@@ -25,31 +25,21 @@
 
 package me.kenzierocks.mcpide.controller
 
-import javafx.beans.binding.Bindings
-import javafx.beans.property.SimpleBooleanProperty
-import javafx.beans.property.SimpleIntegerProperty
-import javafx.beans.property.SimpleStringProperty
+import javafx.beans.property.SimpleObjectProperty
 import javafx.event.ActionEvent
 import javafx.fxml.FXML
-import javafx.scene.Node
-import javafx.scene.Parent
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.TextField
-import javafx.scene.input.KeyCode
-import javafx.stage.WindowEvent
-import javafx.util.StringConverter
-import me.kenzierocks.mcpide.util.getValue
-import me.kenzierocks.mcpide.util.setValue
-import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
-import org.fxmisc.wellbehaved.event.InputMap.consume
-import org.fxmisc.wellbehaved.event.Nodes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.util.varNullable
 import javax.inject.Inject
 
 class FindPopupController @Inject constructor() {
 
-    @FXML
-    private lateinit var root: Parent
     @FXML
     lateinit var textField: TextField
     @FXML
@@ -59,47 +49,24 @@ class FindPopupController @Inject constructor() {
     @FXML
     private lateinit var searchTracker: Label
 
-    private val searchingProperty = SimpleBooleanProperty(this, "searching", false)
-    var searching: Boolean by searchingProperty
+    private val searchHelperProperty = object : SimpleObjectProperty<SearchHelper<*>>(this, "searchHelper") {
+        override fun invalidated() {
+            val sh = get()
+            // Bind search term
+            sh.searchTermProperty.bindBidirectional(textField.textProperty())
+            val notSearching = sh.searchingBinding.not()
+            previousButton.disableProperty().bind(notSearching)
+            nextButton.disableProperty().bind(notSearching)
 
-    val searchTermProperty = SimpleStringProperty(this, "searchTerm", "")
-    var searchTerm: String by searchTermProperty
-
-    val currentSearchIndexProperty = SimpleIntegerProperty(this, "currentSearchIndex", -1)
-    var currentSearchIndex: Int by currentSearchIndexProperty
-
-    val maxSearchIndexProperty = SimpleIntegerProperty(this, "maxSearchIndex", -1)
-    var maxSearchIndex: Int by maxSearchIndexProperty
-
-    /**
-     * Called when the user attempts to start searching.
-     *
-     * Should return `true` if the search is started, or `false` if the
-     * handler does not accept the input to start the search.
-     */
-    var onStartSearch: (FindPopupController) -> Boolean = { false }
-    var onSearchNext: (FindPopupController) -> Unit = {}
-    var onSearchPrevious: (FindPopupController) -> Unit = {}
-    var onCloseRequested: (FindPopupController) -> Unit = {}
+            searchTracker.textProperty().bind(sh.searchTrackerTextBinding)
+        }
+    }
+    var searchHelper: SearchHelper<*>? by searchHelperProperty.varNullable
 
     @FXML
     fun initialize() {
-        // Bind search term, ensuring trimming from user input
-        searchTermProperty.bindBidirectional(textField.textProperty(), object : StringConverter<String>() {
-            override fun toString(tfStr: String) = tfStr.trim()
-            override fun fromString(stStr: String) = stStr
-        })
-        previousButton.disableProperty().bind(searchingProperty.not())
-        nextButton.disableProperty().bind(searchingProperty.not())
-        searchTracker.textProperty().bind(Bindings.createStringBinding({
-            when {
-                currentSearchIndex < 0 || maxSearchIndex < 0 || currentSearchIndex > maxSearchIndex -> ""
-                else -> "$currentSearchIndex/$maxSearchIndex"
-            }
-        }, arrayOf(currentSearchIndexProperty, maxSearchIndexProperty)))
-
         // Search whenever text is typed
-        searchTermProperty.addListener { _, old, new ->
+        textField.textProperty().addListener { _, old, new ->
             if (old != new) {
                 textField.onAction.handle(ActionEvent(textField, textField))
             }
@@ -108,16 +75,21 @@ class FindPopupController @Inject constructor() {
 
     @FXML
     fun startSearch() {
-        searching = onStartSearch(this)
+        GlobalScope.launch(Dispatchers.JavaFx) {
+            searchHelper!!.onSearchStart()
+        }
     }
 
     @FXML
-    fun searchNext() = onSearchNext(this)
+    fun searchNext() =
+        GlobalScope.launch(Dispatchers.JavaFx) { searchHelper!!.onSearchNext() }
 
     @FXML
-    fun searchPrevious() = onSearchPrevious(this)
+    fun searchPrevious() =
+        GlobalScope.launch(Dispatchers.JavaFx) { searchHelper!!.onSearchPrevious() }
 
     @FXML
-    fun close() = onCloseRequested(this)
+    fun close() =
+        GlobalScope.launch(Dispatchers.JavaFx) { searchHelper!!.onSearchCanceled() }
 
 }

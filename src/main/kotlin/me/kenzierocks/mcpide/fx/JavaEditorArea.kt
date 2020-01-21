@@ -36,8 +36,11 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -121,26 +124,31 @@ class JavaEditorArea(
                 else -> InputHandler.Result.PROCEED
             }
         })
-        val helper = SearchHelper(
-            search = { term ->
+        val helper = object : SearchHelper<Pair<Int, MatchResult>>() {
+            override fun search(term: String): Flow<Pair<Int, MatchResult>> {
                 val searcher = term.toRegex(RegexOption.LITERAL)
-                paragraphs.asSequence()
+                return paragraphs.asSequence()
                     .withIndex()
                     .flatMap { (index, paragraph) ->
                         searcher.findAll(paragraph.text).map { index to it }
                     }
-            },
-            moveToResult = { (paragraph, result) ->
-                selectRange(paragraph, result.range.first, paragraph, result.range.last + 1)
+                    .asFlow()
             }
-        )
-        helper.bindTo(c)
-        c.onCloseRequested = {
-            findParent.isVisible = false
+
+            override suspend fun moveToResult(result: Pair<Int, MatchResult>) {
+                val (paragraph, mr) = result
+                selectRange(paragraph, mr.range.first, paragraph, mr.range.last + 1)
+            }
+
+            override suspend fun cancel() {
+                findParent.isVisible = false
+            }
         }
+        c.searchHelper = helper
         children.add(p)
         p.isVisible = false
-        multiPlainChanges().subscribe { helper.reSearch(c) }
+        val reSearchScope = CoroutineScope(Dispatchers.JavaFx + CoroutineName("ReSearchJEA") + SupervisorJob())
+        multiPlainChanges().subscribe { reSearchScope.launch { helper.reSearch() } }
         p.visibleProperty().addListener(InvalidationListener {
             // Focus us after it closes
             requestFocus()
