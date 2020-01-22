@@ -2,9 +2,9 @@
 ================
 An IDE for writing mappings for MCP.
 
-[![Build Status](https://travis-ci.org/kenzierocks/MCPIDE.svg?branch=master)](https://travis-ci.org/kenzierocks/MCPIDE)
+[![Build Status](https://travis-ci.org/octylFractal/MCPIDE.svg?branch=master)](https://travis-ci.org/octylFractal/MCPIDE)
 ![Powered by JavaFX](https://img.shields.io/badge/powered%20by-JavaFX-33cc66.svg)
-[![GitHub release](https://img.shields.io/github/release/kenzierocks/MCPIDE.svg)](https://github.com/kenzierocks/MCPIDE/releases)
+[![GitHub release](https://img.shields.io/github/release/octylFractal/MCPIDE.svg)](https://github.com/octylFractal/MCPIDE/releases)
 
 ## Usage
 To use MCPIDE, simply download the appropriate release for your platform.
@@ -50,7 +50,7 @@ To export to MCP commands, go to `File > Export`. This will export the commands 
 in a file titled `exported-commands.txt`.
 
 If you would like to send these commands to MCPBot in a simple way, check out
-[mcp-irc-export](https://github.com/kenzierocks/mcp-irc-export).
+[mcp-irc-export](https://github.com/octylFractal/mcp-irc-export).
 
 TODO:
 - Fix macOS menu being "java" in unbundled versions, dependent on [JDK-8091007](https://bugs.openjdk.java.net/browse/JDK-8091007)
