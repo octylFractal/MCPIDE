@@ -1,7 +1,7 @@
 language: java
 script: ./gradlew build -s
 jdk:
-  - openjdk12
+  - openjdk13
 # Caching for Gradle files, prevents hitting Maven too much.
 before_cache:
   - find /home/travis/.gradle/ . -name '*.lock' -print -exec rm -f {} \;
