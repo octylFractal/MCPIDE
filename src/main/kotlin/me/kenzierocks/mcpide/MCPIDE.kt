@@ -55,17 +55,6 @@ class MCPIDE : Application() {
 
     private val component: MCPIDEComponent = DaggerMCPIDEComponent.builder()
         .appInstance(this)
-        .coroutineSupportModule(CoroutineSupportModule)
-        .commsModule(CommsModule)
-        .viewModule(ViewModule)
-        .modelModule(ModelModule)
-        .httpModule(HttpModule)
-        .csvModule(CsvModule)
-        .jsonModule(JsonModule)
-        .xmlModule(XmlModule)
-        .fxModule(FxModule)
-        .mavenModule(RepositorySystemModule)
-        .projectModule(ProjectComponent)
         .build()
 
     lateinit var stage: Stage
@@ -77,6 +66,7 @@ class MCPIDE : Application() {
         val (parent, controller) = component.fxmlFiles.main()
         stage.scene = Scene(parent)
         stage.title = "MCPIDE"
+        stage.icons.setAll(generateAppIcons(component.resources.baseAppIcon))
         stage.show()
         stage.centerOnScreen()
         stage.isMaximized = true

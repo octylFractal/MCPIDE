@@ -30,6 +30,7 @@ import dagger.Component
 import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ModelProcessing
+import me.kenzierocks.mcpide.Resources
 import javax.inject.Singleton
 
 @[Singleton Component(
@@ -54,21 +55,10 @@ interface MCPIDEComponent {
         @BindsInstance
         fun appInstance(mcpide: MCPIDE): Builder
 
-        fun coroutineSupportModule(module: CoroutineSupportModule): Builder
-        fun commsModule(module: CommsModule): Builder
-        fun viewModule(module: ViewModule): Builder
-        fun modelModule(module: ModelModule): Builder
-        fun httpModule(module: HttpModule): Builder
-        fun csvModule(module: CsvModule): Builder
-        fun jsonModule(module: JsonModule): Builder
-        fun xmlModule(module: XmlModule): Builder
-        fun fxModule(module: FxModule): Builder
-        fun mavenModule(module: RepositorySystemModule): Builder
-        fun projectModule(module: ProjectComponent.Module): Builder
-
         fun build(): MCPIDEComponent
     }
 
+    val resources: Resources
     val modelProcessing: ModelProcessing
     val fxmlFiles: FxmlFiles
 }

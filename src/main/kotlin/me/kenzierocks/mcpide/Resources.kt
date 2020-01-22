@@ -25,6 +25,8 @@
 
 package me.kenzierocks.mcpide
 
+import javafx.collections.FXCollections
+import javafx.collections.ObservableList
 import javafx.scene.image.Image
 import java.net.URL
 import javax.inject.Inject
@@ -41,6 +43,7 @@ class Resources @Inject constructor() {
     val fileIcon = loadIcon("font-awesome/file-regular.png")
     val folderIcon = loadIcon("font-awesome/folder-regular.png")
     val folderOpenIcon = loadIcon("font-awesome/folder-open-regular.png")
+    val baseAppIcon = loadIcon("icon.png")
 
 }
 
@@ -52,4 +55,10 @@ object ResourceUrl {
         return javaClass.getResource(location)
             ?: throw IllegalArgumentException("No resource at $location")
     }
+}
+
+fun generateAppIcons(appIcon: Image): ObservableList<Image> {
+    return listOf(16, 32, 64, 128, 256).map { size ->
+        Image(appIcon.url, size.toDouble(), 0.0, true, false)
+    }.let { FXCollections.observableList(it) }
 }
