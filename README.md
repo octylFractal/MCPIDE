@@ -1,4 +1,4 @@
-MCPIDE
+![MCPIDE](./docs/icon+name.png)
 ================
 An IDE for writing mappings for MCP.
 
