@@ -23,26 +23,28 @@
  * THE SOFTWARE.
  */
 
-package me.kenzierocks.mcpide
+package me.kenzierocks.mcpide.fx
 
 import javafx.fxml.FXMLLoader
 import javafx.scene.Parent
+import me.kenzierocks.mcpide.ResourceUrl
 import me.kenzierocks.mcpide.controller.ExportableMappingsController
 import me.kenzierocks.mcpide.controller.FileAskDialogController
 import me.kenzierocks.mcpide.controller.FindInPathController
 import me.kenzierocks.mcpide.controller.FindPopupController
 import me.kenzierocks.mcpide.controller.MainController
+import me.kenzierocks.mcpide.inject.ProjectQ
+import me.kenzierocks.mcpide.inject.ProjectScope
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
 data class LoadedParent<C>(val parent: Parent, val controller: C)
 
-@Singleton
-class FxmlFiles @Inject constructor(
+open class FxmlFilesCommon(
     private val fxmlLoader: Provider<FXMLLoader>
 ) {
-    private fun <C> load(location: String, controllerType: Class<C>): LoadedParent<C> {
+    protected fun <C> load(location: String, controllerType: Class<C>): LoadedParent<C> {
         val loader = fxmlLoader.get()
         loader.location = ResourceUrl(location)
         // Enforce generics now, to prevent CCE later
@@ -51,11 +53,22 @@ class FxmlFiles @Inject constructor(
         return LoadedParent(parent, controller)
     }
 
-    private inline fun <reified C> load(location: String) = load(location, C::class.java)
+    protected inline fun <reified C> load(location: String) = load(location, C::class.java)
+}
 
+@Singleton
+class FxmlFiles @Inject constructor(
+    fxmlLoader: Provider<FXMLLoader>
+) : FxmlFilesCommon(fxmlLoader) {
     fun main() = load<MainController>("Main.fxml")
     fun fileAskDialog() = load<FileAskDialogController>("FileAskDialog.fxml")
     fun exportableMappings() = load<ExportableMappingsController>("ExportableMappings.fxml")
     fun findPopup() = load<FindPopupController>("FindPopup.fxml")
+}
+
+@ProjectScope
+class ProjectFxmlFiles @Inject constructor(
+    @ProjectQ fxmlLoader: Provider<FXMLLoader>
+) : FxmlFilesCommon(fxmlLoader) {
     fun findInPath() = load<FindInPathController>("FindInPathDialog.fxml")
 }

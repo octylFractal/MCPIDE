@@ -58,7 +58,8 @@ data class MapStyle(
     val text: String,
     val style: Style,
     val jumpTarget: JumpTarget? = null,
-    val srgName: String? = null
+    val srgName: String? = null,
+    val highlighted: Boolean = false
 ) {
     val styleClasses: Set<String> by lazy {
         val result = mutableSetOf(style.styleClass)
@@ -66,6 +67,9 @@ data class MapStyle(
             SrgType.FIELD -> Collections.addAll(result, "mapped", "field")
             SrgType.METHOD -> Collections.addAll(result, "mapped", "method")
             SrgType.PARAMETER -> Collections.addAll(result, "mapped", "param")
+        }
+        if (highlighted) {
+            result.add("mcpide-highlighted")
         }
         result
     }

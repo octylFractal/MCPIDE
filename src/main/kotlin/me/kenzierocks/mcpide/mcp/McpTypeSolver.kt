@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.map
 import me.kenzierocks.mcpide.inject.MavenAccess
 import me.kenzierocks.mcpide.util.gradleCoordsToMaven
 import me.kenzierocks.mcpide.util.typesolve.JavaParserTypeSolver
+import mu.KotlinLogging
 import org.eclipse.aether.artifact.DefaultArtifact
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -48,9 +49,11 @@ import javax.inject.Inject
 class McpTypeSolver @Inject constructor(
     private val mavenAccess: MavenAccess
 ) {
-    suspend fun buildFrom(mcpRunner: McpRunner) : TypeSolver {
-        val minecraftJar = requireNotNull(mcpRunner.steps["decompile"]?.output) {
-            "Runner should be run to the 'decompile' step first."
+    private val logger = KotlinLogging.logger {}
+
+    suspend fun buildFrom(mcpRunner: McpRunner): TypeSolver {
+        val minecraftJar = requireNotNull(mcpRunner.steps["patch"]?.output) {
+            "Runner should be run to the 'patch' step first."
         }
         val libraries = requireNotNull(mcpRunner.steps["listLibraries"]?.output) {
             "Runner should be run to the 'listLibraries' step first."
@@ -60,6 +63,7 @@ class McpTypeSolver @Inject constructor(
 
     // Allow custom setup of these files:
     suspend fun buildFromCustom(mcpRunner: McpRunner, minecraftJar: Path, librariesList: Path) : TypeSolver {
+        logger.debug { "Added library for type solving: $minecraftJar" }
         val mcFs = FileSystems.newFileSystem(minecraftJar)
         val typeSolver = CombinedTypeSolver(
             CombinedTypeSolver.ExceptionHandlers.IGNORE_ALL,
@@ -67,6 +71,7 @@ class McpTypeSolver @Inject constructor(
         )
         Files.newBufferedReader(librariesList).useLines { lines ->
             lines.map { it.substringAfter("-e=") }.forEach {
+                logger.debug { "Added library for type solving: $it" }
                 typeSolver.add(JarTypeSolver(it))
             }
         }

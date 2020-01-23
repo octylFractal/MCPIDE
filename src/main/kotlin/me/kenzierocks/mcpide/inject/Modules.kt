@@ -38,8 +38,6 @@ import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import dagger.Module
 import dagger.Provides
-import javafx.fxml.FXMLLoader
-import javafx.util.Callback
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -55,11 +53,6 @@ import me.kenzierocks.mcpide.comms.ModelMessage
 import me.kenzierocks.mcpide.comms.PublishComms
 import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
-import me.kenzierocks.mcpide.controller.ExportableMappingsController
-import me.kenzierocks.mcpide.controller.FileAskDialogController
-import me.kenzierocks.mcpide.controller.FindInPathController
-import me.kenzierocks.mcpide.controller.FindPopupController
-import me.kenzierocks.mcpide.controller.MainController
 import me.kenzierocks.mcpide.data.FileCache
 import me.kenzierocks.mcpide.util.HttpsUpgradeInterceptor
 import me.kenzierocks.mcpide.util.OwnerExecutor
@@ -68,9 +61,7 @@ import me.kenzierocks.mcpide.util.typesolve.NodeTypeFinder
 import mu.KotlinLogging
 import okhttp3.Cache
 import okhttp3.OkHttpClient
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
-import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
@@ -175,40 +166,6 @@ object XmlModule {
             findAndRegisterModules()
             disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         }
-}
-
-interface ControllerFactory : Callback<Class<*>, Any>
-
-private inline fun <reified T> controllerBind(source: Provider<T>): Pair<Class<*>, () -> T> =
-    T::class.java to source::get
-
-@Module
-object FxModule {
-    @[Provides Singleton]
-    fun provideControllerFactory(
-        mainController: Provider<MainController>,
-        fileAskDialogController: Provider<FileAskDialogController>,
-        exportableMappingsController: Provider<ExportableMappingsController>,
-        findPopupController: Provider<FindPopupController>,
-        findInPathController: Provider<FindInPathController>
-    ): ControllerFactory {
-        val controllers = mapOf(
-            controllerBind(mainController),
-            controllerBind(fileAskDialogController),
-            controllerBind(exportableMappingsController),
-            controllerBind(findPopupController),
-            controllerBind(findInPathController)
-        )
-        return object : ControllerFactory {
-            override fun call(cls: Class<*>) =
-                (controllers[cls] ?: throw IllegalStateException("No controller for class ${cls.name}"))()
-        }
-    }
-
-    @Provides
-    fun provideFxmlLoader(controllerFactory: ControllerFactory) =
-        FXMLLoader(null, null, null, controllerFactory, StandardCharsets.UTF_8)
-
 }
 
 @Module

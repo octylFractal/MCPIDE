@@ -31,8 +31,15 @@ import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.collections.ObservableList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.withContext
 import me.kenzierocks.mcpide.util.getValue
 import me.kenzierocks.mcpide.util.setValue
 
@@ -67,6 +74,8 @@ abstract class SearchHelper<T> {
     private val maxSearchIndexProperty = listProperty.sizeProperty()!!
     private val maxSearchIndex: Int by maxSearchIndexProperty
 
+    private var searchJob: Job? = null
+
     val searchTrackerTextBinding by lazy(LazyThreadSafetyMode.NONE) {
         Bindings.createStringBinding({
             when {
@@ -90,26 +99,31 @@ abstract class SearchHelper<T> {
     }
 
     suspend fun onSearchStart(): Boolean {
-        val term = searchTerm
-        if (term.isBlank()) {
-            return false
-        }
-        val results = search(term)
-        list.clear()
-        currentSearchIndex = -1
-        return when (results) {
-            null -> false
-            else -> {
-                val l = results.toList()
-                when {
-                    // Catch oddities about the search
-                    l.isEmpty() -> false
-                    else -> {
-                        list.setAll(l)
-                        currentSearchIndex = 0
-                        moveToCurrentResult()
-                        true
-                    }
+        return withContext(Dispatchers.JavaFx.immediate) {
+            val term = searchTerm
+            if (term.isBlank()) {
+                return@withContext false
+            }
+            val results = search(term)
+            // Cancel any currently in progress search, wait for it to exit out
+            searchJob?.cancelAndJoin()
+            searchJob = coroutineContext[Job]!!
+            list.clear()
+            currentSearchIndex = -1
+            // ensure we collect the flow on Default, avoid blocking UI
+            val l = withContext(Dispatchers.Default) {
+                results
+                    .onEach { ensureActive() }
+                    .toList()
+            }
+            return@withContext when {
+                // Catch oddities about the search
+                l.isEmpty() -> false
+                else -> {
+                    list.setAll(l)
+                    currentSearchIndex = 0
+                    moveToCurrentResult()
+                    true
                 }
             }
         }
@@ -144,7 +158,7 @@ abstract class SearchHelper<T> {
 
     // Implementation
 
-    abstract fun search(term: String): Flow<T>?
+    abstract fun search(term: String): Flow<T>
     abstract suspend fun moveToResult(result: T)
     abstract suspend fun cancel()
 

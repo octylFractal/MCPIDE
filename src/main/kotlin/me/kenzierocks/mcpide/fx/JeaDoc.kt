@@ -31,7 +31,8 @@ import me.kenzierocks.mcpide.util.requireRange
 import org.fxmisc.richtext.model.EditableStyledDocument
 import org.fxmisc.richtext.model.StyledDocument
 
-typealias JeaDoc = EditableStyledDocument<Collection<String>, String, MapStyle>
+typealias EditableJeaDoc = EditableStyledDocument<Collection<String>, String, MapStyle>
+typealias JeaDoc = StyledDocument<Collection<String>, String, MapStyle>
 
 fun StyledDocument<*, *, *>.offset(pos: Position): Int {
     return position(pos.line - 1, pos.column - 1).toOffset()
@@ -42,7 +43,11 @@ fun StyledDocument<*, *, *>.offsets(token: JavaToken): IntRange {
     return offset(range.begin)..offset(range.end)
 }
 
-inline fun JeaDoc.updateStyle(range: IntRange, copyImpl: MapStyle.() -> MapStyle) {
-    val originalStyle = getStyleSpans(range.first, range.last + 1).single().style
+fun EditableJeaDoc.updateStyle(range: IntRange, copyImpl: MapStyle.() -> MapStyle) {
+    val styleSpans = getStyleSpans(range.first, range.last + 1)
+    if (styleSpans.count() > 1) {
+        assert(true) { "I would like a breakpoint please!" }
+    }
+    val originalStyle = styleSpans.single().style
     setStyle(range.first, range.last + 1, originalStyle.copyImpl())
 }

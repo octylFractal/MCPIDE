@@ -38,7 +38,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
@@ -48,7 +47,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
-import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
 import me.kenzierocks.mcpide.comms.JumpTo
 import me.kenzierocks.mcpide.comms.PublishComms
@@ -66,9 +64,6 @@ import mu.KotlinLogging
 import net.octyl.aptcreator.GenerateCreator
 import net.octyl.aptcreator.Provided
 import org.fxmisc.richtext.LineNumberFactory
-import org.fxmisc.richtext.model.ReadOnlyStyledDocument
-import org.fxmisc.richtext.model.SimpleEditableStyledDocument
-import org.fxmisc.richtext.model.StyleSpansBuilder
 import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
 import org.fxmisc.wellbehaved.event.EventPattern.mousePressed
 import org.fxmisc.wellbehaved.event.InputHandler
@@ -84,7 +79,7 @@ class JavaEditorArea(
     @Provided
     private val publishComms: PublishComms,
     @Provided
-    private val astSpanMarkerCreator: AstSpanMarkerCreator,
+    private val highlighter: Highlighter,
     @Provided
     private val fxmlFiles: FxmlFiles
 ) : MappingTextArea() {
@@ -188,26 +183,10 @@ class JavaEditorArea(
             val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
             val jarRoot = publishComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
 
-            return coroutineScope {
-                val styles = remap(text, mappings)
-
-                // Create new document with appropriate styles
-                val doc = SimpleEditableStyledDocument(
-                    initialParagraphStyle, initialTextStyle
-                )
-                doc.replace(0, 0, ReadOnlyStyledDocument.fromString(
-                    styles.joinToString("") { it.text }, initialParagraphStyle, initialTextStyle, segOps
-                ))
-                val styleSpans = styles
-                    .fold(StyleSpansBuilder<MapStyle>()) { acc, next -> acc.add(next, next.text.length) }
-                    .create()
-                doc.setStyleSpans(0, styleSpans)
-
-                val symSol = astSpanMarkerCreator.create(jarRoot, doc)
-                symSol.markAst()
-
-                doc
-            }
+            return highlighter.highlight(
+                HighlightRequirements(this, mappings, jarRoot),
+                text, path.toString()
+            )
         } finally {
             publishComms.viewChannel.send(StatusUpdate("Highlighting", ""))
         }

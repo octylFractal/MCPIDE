@@ -37,6 +37,10 @@ data class SrgMapping(
     val side: Side,
     val desc: String? = null
 ) {
+    init {
+        check(SRG_REGEX.matches(srgName)) { "Invalid SRG name: $srgName" }
+    }
+
     @JsonIgnore
     val type = srgName.detectSrgType()
         ?: throw IllegalArgumentException("SRG name did not contain type prefix")
@@ -81,5 +85,5 @@ fun String.detectSrgType(): SrgType? {
  * Matches valid SRG names.
  */
 val SRG_REGEX = Regex(
-    "(func|field)_\\d+_[a-zA-Z]+_?|p_i?\\d+_\\d+_"
+    "(func|field)_\\d+_[a-zA-Z]+_*|p_i?\\d+_\\d+_"
 )

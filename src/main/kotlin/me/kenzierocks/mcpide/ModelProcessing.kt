@@ -221,7 +221,7 @@ class ModelProcessing @Inject constructor(
                 runBlocking {
                     val p = requireProjectWorker()
                     val runner = p.read { newMcpRunner() }
-                    runner.run("decompile") { }
+                    runner.run("patch") { }
                     mcpTypeSolver.buildFrom(runner)
                 }
             }))

@@ -45,6 +45,7 @@ import javafx.scene.control.TreeItem
 import javafx.scene.control.TreeView
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
+import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseButton
 import javafx.stage.DirectoryChooser
 import javafx.stage.Modality
@@ -59,7 +60,6 @@ import kotlinx.coroutines.channels.sendBlocking
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ManifestVersion
 import me.kenzierocks.mcpide.Resources
@@ -84,6 +84,7 @@ import me.kenzierocks.mcpide.comms.ViewComms
 import me.kenzierocks.mcpide.comms.ViewMessage
 import me.kenzierocks.mcpide.comms.sendForResponse
 import me.kenzierocks.mcpide.exhaustive
+import me.kenzierocks.mcpide.fx.FxmlFiles
 import me.kenzierocks.mcpide.fx.JavaEditorArea
 import me.kenzierocks.mcpide.fx.JumpTarget
 import me.kenzierocks.mcpide.inject.MavenAccess
@@ -95,8 +96,10 @@ import me.kenzierocks.mcpide.util.setPrefSizeFromContent
 import me.kenzierocks.mcpide.util.showAndSuspend
 import mu.KotlinLogging
 import org.fxmisc.flowless.VirtualizedScrollPane
+import org.fxmisc.wellbehaved.event.EventPattern.keyPressed
 import org.fxmisc.wellbehaved.event.EventPattern.mouseClicked
 import org.fxmisc.wellbehaved.event.InputHandler
+import org.fxmisc.wellbehaved.event.InputMap.consume
 import org.fxmisc.wellbehaved.event.InputMap.process
 import org.fxmisc.wellbehaved.event.Nodes
 import java.io.File
@@ -460,6 +463,7 @@ class MainController @Inject constructor(
             val (parent, controller) = fxmlFiles.exportableMappings()
             controller.items.setAll(exported.values)
             val stage = Stage()
+            stage.icons.setAll(resources.applicationIcons)
             stage.title = "Exportable Mappings"
             stage.scene = Scene(parent)
             stage.sizeToScene()
@@ -538,15 +542,21 @@ class MainController @Inject constructor(
 
     @FXML
     fun findInPath() {
+        val project = activeProject ?: return
         viewScope.launch {
-            val (parent, controller) = fxmlFiles.findInPath()
+            val (parent, controller) = project.fxmlFiles.findInPath()
             controller.rootPath = viewComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
             val stage = Stage(StageStyle.UNDECORATED)
+            stage.icons.setAll(resources.applicationIcons)
             stage.initModality(Modality.APPLICATION_MODAL)
             stage.scene = Scene(parent)
             stage.show()
             stage.sizeToScene()
             stage.centerOnScreen()
+
+            Nodes.addInputMap(parent, consume(keyPressed(KeyCode.ESCAPE)) {
+                stage.hide()
+            })
         }
     }
 

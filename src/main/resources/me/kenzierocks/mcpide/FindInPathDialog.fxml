@@ -9,28 +9,38 @@
 <?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
-
-<TitledPane fx:id="root" collapsible="false" styleClass="root" stylesheets="@darktheme.css" text="Find in Path" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.kenzierocks.mcpide.controller.FindInPathController">
+<TitledPane fx:id="root" collapsible="false" styleClass="root" stylesheets="@darktheme.css" text="Find in Path"
+            xmlns="http://javafx.com/javafx/11.0.1" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="me.kenzierocks.mcpide.controller.FindInPathController">
     <content>
         <VBox prefHeight="450.0" spacing="10.0">
-            <TextField fx:id="textField" onAction="#startSearch" prefColumnCount="50" promptText="Find..." VBox.vgrow="NEVER" />
+            <TextField fx:id="textField" onAction="#startSearch" prefColumnCount="50" promptText="Find..."
+                       VBox.vgrow="NEVER"/>
             <HBox alignment="CENTER" spacing="5.0" VBox.vgrow="NEVER">
                 <children>
-                    <Label styleClass="dark-label" text="From:" />
-                    <RadioButton fx:id="sourceFromProject" contentDisplay="TEXT_ONLY" mnemonicParsing="false" text="Whole Project">
+                    <Label styleClass="dark-label" text="From:"/>
+                    <RadioButton fx:id="sourceFromProject" contentDisplay="TEXT_ONLY" mnemonicParsing="false"
+                                 selected="true" text="Whole Project">
                         <toggleGroup>
-                            <ToggleGroup fx:id="source" />
+                            <ToggleGroup fx:id="source"/>
                         </toggleGroup>
                     </RadioButton>
-                    <RadioButton fx:id="sourceFromDir" contentDisplay="TEXT_ONLY" mnemonicParsing="false" selected="true" text="Directory:" toggleGroup="$source" />
-                    <TextField fx:id="sourceDirectory" promptText="Directory..." HBox.hgrow="ALWAYS" />
+                    <RadioButton fx:id="sourceFromDir" contentDisplay="TEXT_ONLY" mnemonicParsing="false"
+                                 text="Directory:" toggleGroup="$source"/>
+                    <TextField fx:id="sourceDirectory" promptText="Directory..." HBox.hgrow="ALWAYS"/>
                 </children>
             </HBox>
-            <ListView fx:id="items" VBox.vgrow="ALWAYS">
+            <ListView fx:id="items" stylesheets="@Main.css,@highlighting.css" VBox.vgrow="ALWAYS">
                 <VBox.margin>
-                    <Insets />
+                    <Insets/>
                 </VBox.margin>
             </ListView>
+            <HBox alignment="CENTER_RIGHT">
+                <children>
+                    <Label fx:id="searchTracker" alignment="CENTER_RIGHT" styleClass="dark-label" text="0/0"
+                           textAlignment="RIGHT"/>
+                </children>
+            </HBox>
         </VBox>
     </content>
 </TitledPane>

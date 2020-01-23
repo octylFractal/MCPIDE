@@ -25,6 +25,7 @@
 
 package me.kenzierocks.mcpide.controller
 
+import javafx.application.Platform
 import javafx.beans.binding.Bindings
 import javafx.beans.property.SimpleObjectProperty
 import javafx.event.ActionEvent
@@ -35,15 +36,32 @@ import javafx.scene.control.TextField
 import javafx.scene.control.Toggle
 import javafx.scene.control.ToggleGroup
 import javafx.stage.WindowEvent
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
+import me.kenzierocks.mcpide.comms.GetMinecraftJarRoot
+import me.kenzierocks.mcpide.comms.PublishComms
+import me.kenzierocks.mcpide.comms.RetrieveMappings
+import me.kenzierocks.mcpide.comms.sendForResponse
+import me.kenzierocks.mcpide.fx.HighlightRequirements
+import me.kenzierocks.mcpide.fx.Highlighter
+import me.kenzierocks.mcpide.fx.MappingTextArea
+import me.kenzierocks.mcpide.fx.SearchResultListCell
+import me.kenzierocks.mcpide.inject.ProjectScope
 import me.kenzierocks.mcpide.util.varNullable
 import java.nio.file.Path
+import java.util.concurrent.Callable
 import javax.inject.Inject
 
-class FindInPathController @Inject constructor() {
+@ProjectScope
+class FindInPathController @Inject constructor(
+    private val publishComms: PublishComms,
+    private val highlighter: Highlighter
+) {
 
     @FXML
     lateinit var textField: TextField
@@ -76,29 +94,41 @@ class FindInPathController @Inject constructor() {
     }
 
     private val searchHelperProperty by lazy {
-        Bindings.createObjectBinding({
-            searchDirectoryBinding.get()?.let { searchDir ->
-                object : AsyncPathSearchHelper(searchDir) {
-                    override suspend fun cancel() {
-                        textField.scene?.window?.let { window ->
-                            window.onCloseRequest.handle(WindowEvent(window, WindowEvent.WINDOW_CLOSE_REQUEST))
-                        }
+        val highlightRequirements = CoroutineScope(
+            Dispatchers.JavaFx.immediate + CoroutineName("FindInPathGetHighlightRequirements")
+        ).async {
+            val mappings = publishComms.modelChannel.sendForResponse(RetrieveMappings)
+            val jarRoot = publishComms.modelChannel.sendForResponse(GetMinecraftJarRoot)
+            HighlightRequirements(MappingTextArea(), mappings, jarRoot)
+        }
+        val bindingExpr = Callable<AsyncPathSearchHelper> {
+            val searchDir = searchDirectoryBinding.value ?: return@Callable null
+            return@Callable object : AsyncPathSearchHelper(searchDir, highlighter, highlightRequirements) {
+                override suspend fun cancel() {
+                    textField.scene?.window?.let { window ->
+                        window.onCloseRequest.handle(WindowEvent(window, WindowEvent.WINDOW_CLOSE_REQUEST))
                     }
                 }
             }
-        }, arrayOf(searchDirectoryBinding)).also { bind ->
+        }
+        Bindings.createObjectBinding(bindingExpr, searchDirectoryBinding).also { bind ->
             bind.addListener { _, old, new ->
                 old?.searchTermProperty?.unbindBidirectional(textField.textProperty())
                 if (new != null) {
-                    // Bind search term
-                    new.searchTermProperty.bindBidirectional(textField.textProperty())
-
-                    searchTracker.textProperty().bind(new.searchTrackerTextBinding)
-
-                    items.itemsProperty().bind(new.listProperty)
+                    bindAsyncSearchHelper(new)
                 }
             }
+            bindAsyncSearchHelper(bind.value)
         }
+    }
+
+    private fun bindAsyncSearchHelper(new: AsyncPathSearchHelper) {
+        // Bind search term
+        new.searchTermProperty.bindBidirectional(textField.textProperty())
+
+        searchTracker.textProperty().bind(new.searchTrackerTextBinding)
+
+        items.itemsProperty().bind(new.listProperty)
     }
 
     @FXML
@@ -106,14 +136,20 @@ class FindInPathController @Inject constructor() {
         // Search whenever text is typed
         textField.textProperty().addListener { _, old, new ->
             if (old != new) {
-                textField.onAction.handle(ActionEvent(textField, textField))
+                // need to use runLater so the new text is what gets searched
+                Platform.runLater {
+                    textField.onAction.handle(ActionEvent(textField, textField))
+                }
             }
+        }
+        items.setCellFactory {
+            SearchResultListCell()
         }
     }
 
     @FXML
     fun startSearch() {
-        GlobalScope.launch(Dispatchers.JavaFx) {
+        GlobalScope.launch(Dispatchers.JavaFx.immediate) {
             searchHelperProperty.get()!!.onSearchStart()
         }
     }

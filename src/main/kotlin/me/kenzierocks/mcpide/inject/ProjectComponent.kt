@@ -29,12 +29,14 @@ import com.github.javaparser.symbolsolver.model.resolution.TypeSolver
 import dagger.BindsInstance
 import dagger.Subcomponent
 import me.kenzierocks.mcpide.fx.JavaEditorAreaCreator
+import me.kenzierocks.mcpide.fx.ProjectFxmlFiles
 import me.kenzierocks.mcpide.project.Project
 import java.nio.file.Path
 
 @Subcomponent(
     modules = [
-        JavaParserModule::class
+        JavaParserModule::class,
+        ProjectFxModule::class
     ]
 )
 @ProjectScope
@@ -47,6 +49,7 @@ interface ProjectComponent {
 
     val project: Project
     val javaEditorAreaCreator: JavaEditorAreaCreator
+    val fxmlFiles: ProjectFxmlFiles
 
     @Subcomponent.Builder
     interface Builder {

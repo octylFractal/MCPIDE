@@ -121,7 +121,7 @@ import java.util.Optional
 @ProjectScope
 class AstSpanMarker(
     private val root: Path,
-    private val jeaDoc: JeaDoc,
+    private val jeaDoc: EditableJeaDoc,
     @Provided
     private val javaParser: JavaParser,
     @Provided
@@ -578,7 +578,7 @@ class AstSpanMarker(
         }
         add<BreakStmt> {
             markKeyword("break")
-            markNode(label)
+            label.ifPresent { markSimpleName(it, Style.OTHER_IDENTIFIER) }
         }
         add<EnumDeclaration> {
             markNodes(annotations)

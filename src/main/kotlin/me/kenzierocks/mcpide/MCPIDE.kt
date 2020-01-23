@@ -28,19 +28,8 @@ package me.kenzierocks.mcpide
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.stage.Stage
-import me.kenzierocks.mcpide.inject.CommsModule
-import me.kenzierocks.mcpide.inject.CoroutineSupportModule
-import me.kenzierocks.mcpide.inject.CsvModule
 import me.kenzierocks.mcpide.inject.DaggerMCPIDEComponent
-import me.kenzierocks.mcpide.inject.FxModule
-import me.kenzierocks.mcpide.inject.HttpModule
-import me.kenzierocks.mcpide.inject.JsonModule
 import me.kenzierocks.mcpide.inject.MCPIDEComponent
-import me.kenzierocks.mcpide.inject.ModelModule
-import me.kenzierocks.mcpide.inject.ProjectComponent
-import me.kenzierocks.mcpide.inject.RepositorySystemModule
-import me.kenzierocks.mcpide.inject.ViewModule
-import me.kenzierocks.mcpide.inject.XmlModule
 import me.kenzierocks.mcpide.util.LineConsumer
 import me.kenzierocks.mcpide.util.LineOutputStream
 import mu.KLogger
@@ -66,7 +55,7 @@ class MCPIDE : Application() {
         val (parent, controller) = component.fxmlFiles.main()
         stage.scene = Scene(parent)
         stage.title = "MCPIDE"
-        stage.icons.setAll(generateAppIcons(component.resources.baseAppIcon))
+        stage.icons.setAll(component.resources.applicationIcons)
         stage.show()
         stage.centerOnScreen()
         stage.isMaximized = true

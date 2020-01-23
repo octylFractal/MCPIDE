@@ -27,11 +27,62 @@ package me.kenzierocks.mcpide.fx
 
 import me.kenzierocks.mcpide.SRG_REGEX
 import me.kenzierocks.mcpide.comms.MappingInfo
+import me.kenzierocks.mcpide.inject.ProjectScope
+import org.fxmisc.richtext.model.ReadOnlyStyledDocument
+import org.fxmisc.richtext.model.SimpleEditableStyledDocument
+import org.fxmisc.richtext.model.StyleSpansBuilder
+import java.nio.file.Path
+import javax.inject.Inject
+
+@ProjectScope
+class Highlighter @Inject constructor(
+    private val astSpanMarkerCreator: AstSpanMarkerCreator
+) {
+
+    fun highlight(
+        requirements: HighlightRequirements,
+        text: String,
+        textSource: String
+    ): JeaDoc {
+        val styledTextArea = requirements.styledTextArea
+        val styles = remap(text, requirements.mappings)
+
+        // Create new document with appropriate styles
+        val doc = SimpleEditableStyledDocument(
+            styledTextArea.initialParagraphStyle, styledTextArea.initialTextStyle
+        )
+        doc.replace(0, 0, ReadOnlyStyledDocument.fromString(
+            styles.joinToString("") { it.text },
+            styledTextArea.initialParagraphStyle,
+            styledTextArea.initialTextStyle,
+            styledTextArea.segOps
+        ))
+        val styleSpans = styles
+            .fold(StyleSpansBuilder<MapStyle>()) { acc, next -> acc.add(next, next.text.length) }
+            .create()
+        doc.setStyleSpans(0, styleSpans)
+
+        val symSol = astSpanMarkerCreator.create(requirements.jarRoot, doc)
+        try {
+            symSol.markAst()
+        } catch (e: Exception) {
+            throw RuntimeException("Error highlighting text source '$textSource'", e)
+        }
+
+        return doc
+    }
+}
+
+data class HighlightRequirements(
+    val styledTextArea: MappingTextArea,
+    val mappings: MappingInfo,
+    val jarRoot: Path
+)
 
 /**
  * Given some text, tokenize it, replace names (not updating positioning), and produce a stream of styles.
  */
-suspend fun remap(
+fun remap(
     text: String,
     mappingInfo: MappingInfo
 ): Sequence<MapStyle> {

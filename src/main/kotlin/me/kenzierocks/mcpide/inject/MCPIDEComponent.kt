@@ -27,10 +27,10 @@ package me.kenzierocks.mcpide.inject
 
 import dagger.BindsInstance
 import dagger.Component
-import me.kenzierocks.mcpide.FxmlFiles
 import me.kenzierocks.mcpide.MCPIDE
 import me.kenzierocks.mcpide.ModelProcessing
 import me.kenzierocks.mcpide.Resources
+import me.kenzierocks.mcpide.fx.FxmlFiles
 import javax.inject.Singleton
 
 @[Singleton Component(

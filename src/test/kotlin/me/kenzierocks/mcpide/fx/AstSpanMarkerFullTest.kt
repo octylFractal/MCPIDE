@@ -195,7 +195,7 @@ class AstSpanMarkerFullTest {
     @EnabledIfSystemProperty(named = ENABLE_PROP, matches = "1")
     fun passesEveryFile(path: Path) {
         try {
-            val doc: JeaDoc = SimpleEditableStyledDocument(
+            val doc: EditableJeaDoc = SimpleEditableStyledDocument(
                 setOf(), DEFAULT_MAP_STYLE
             )
             doc.replace(0, 0, ReadOnlyStyledDocument.fromString(
